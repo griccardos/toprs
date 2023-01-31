@@ -1,0 +1,21 @@
+[package]
+name = "toprs"
+version = "0.1.0"
+edition = "2021"
+description = "Cross platform memory focused top"
+repository =  "https://github.com/griccardos/toprs/"
+readme = "README.md"
+keywords = ["top", "memory","cpu","usage"]
+categories = ["Command line utilities","Visualization"]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+crossterm = "0.25.0"
+dioxus = "0.3.1" #gui
+dioxus-desktop = "0.3.0" #gui
+formato = "0.2.0" #format numbers
+gumdrop = "0.8.1" #arguments
+sysinfo = "0.27.7" #get system info
+tokio = { version = "1.24.2", features = ["time"] } #sleep
+tui = "0.19.0" #console tui
