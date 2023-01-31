@@ -43,6 +43,7 @@ Flamegraph blue portion is child memory, and red/yellow is its own memory
 ### FAQ
 - What memory is it using?
     - In windows this is the "working set" 
+    - In Linux this is the "resident" memory i.e. used physical memory
 
 
 ### Thanks
