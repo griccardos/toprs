@@ -9,14 +9,15 @@ keywords = ["top", "memory","cpu","usage"]
 categories = ["Command line utilities","Visualization"]
 license = "MIT"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
-crossterm = "0.25.0"
+crossterm = "0.26.0"
 dioxus = "0.3.1" #gui
 dioxus-desktop = "0.3.0" #gui
 formato = "0.2.0" #format numbers
 gumdrop = "0.8.1" #arguments
 sysinfo = "0.27.7" #get system info
-tokio = { version = "1.24.2", features = ["time"] } #sleep
+tokio = { version = "1.25.0", features = ["time"] } #sleep
 tui = "0.19.0" #console tui
+dirs ="4.0.0" #for load config from home
+toml = "0.7.1" #for config
+serde="1.0.152" #for config

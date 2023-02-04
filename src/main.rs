@@ -10,9 +10,11 @@ use std::{
     fs::File,
     io::{BufWriter, Write},
     path::PathBuf,
+    str::FromStr,
 };
 
 use gumdrop::Options;
+use serde::Deserialize;
 
 #[derive(Options)]
 struct Args {
@@ -32,24 +34,73 @@ struct Args {
     help: bool,
 }
 
+#[derive(Deserialize)]
+enum Mode {
+    GUI,
+    TUI,
+}
+
+#[derive(Deserialize)]
+struct Config {
+    mode: Mode,
+}
+
 fn main() {
     let ops = Args::parse_args_default_or_exit();
+    let config = get_config();
 
     if let Some(path) = ops.svg {
         draw_flamegraph(path);
     } else if ops.gui {
         gui::run();
     } else if ops.tui {
-        if let Ok(run_gui) = tui::run() {
-            if run_gui {
-                gui::run();
-            }
-        }
+        run_tui();
     } else if ops.out {
         run_output();
     } else {
-        tui::run().unwrap_or_default();
+        //no arguments so we try load config or default
+        match config.mode {
+            Mode::GUI => gui::run(),
+            Mode::TUI => run_tui(),
+        }
     }
+}
+
+///run tui, might also request to go to gui within tui
+fn run_tui() {
+    if let Ok(run_gui) = tui::run() {
+        if run_gui {
+            gui::run();
+        }
+    }
+}
+
+fn get_config() -> Config {
+    //load paths: first home, else /etc
+    let mut paths = vec![];
+    //home directory
+    if let Some(mut dir) = dirs::home_dir() {
+        dir.push(".config");
+        dir.push("toprs");
+        dir.push("config.toml");
+        paths.push(dir);
+    }
+    //fallback
+    paths.push(PathBuf::from_str("/etc/toprs/config.toml").unwrap());
+
+    //if find file, use it
+    for path in paths {
+        if path.exists() {
+            if let Ok(str) = std::fs::read_to_string(path) {
+                if let Ok(config) = toml::from_str(&str) {
+                    return config;
+                }
+            }
+        }
+    }
+
+    //default
+    Config { mode: Mode::TUI }
 }
 
 fn run_output() {
@@ -59,13 +110,14 @@ fn run_output() {
     for p in procs {
         {
             println!(
-                "{}\t{:?}\t{}\t{}\t{}\t{}",
+                "{}\t{:?}\t{}\t{}\t{}\t{}\t{}",
                 p.pid,
                 p.parent,
                 p.name,
                 p.memory,
                 p.children_memory,
-                p.total()
+                p.total(),
+                p.cpu
             );
         }
     }

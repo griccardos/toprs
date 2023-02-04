@@ -5,8 +5,19 @@ In addition to each process having only their memory usage, it also has the sum 
 
 ## running
 Install via
-`$ cargo install toprs`
+`$ cargo install toprs`  
 Run `toprs` for console or `toprs -g` for gui
+
+If you want to always run as gui, add the following to your config file located
+- `~/.config/toprs/config.toml` 
+- `c:\Users\Name\.config\toprs\config.toml` 
+- `/etc/toprs/config.toml` 
+
+```toml
+mode="GUI"
+```
+
+
 
 Gui mode
 ![Gui](Screenshot1.PNG)
