@@ -12,6 +12,7 @@ use crate::{
 };
 
 ///Hide console window because we are running gui
+#[cfg(target_os = "windows")]
 fn hide_console_window() {
     use std::ptr;
     use winapi::um::wincon::GetConsoleWindow;

@@ -29,8 +29,12 @@ impl ProcManager {
     }
 
     pub fn get_totals(&self) -> Totals {
+        //there is a difference between the sum of the procs resident memory and total memory as per sysinfo.
+        //we use sum of proc resident memory to be consistent with proc display
+        let mem = self.procs.iter().map(|x| x.memory).sum();
+
         Totals {
-            memory: self.system.used_memory(),
+            memory: mem,
             cpu: self.system.global_cpu_info().cpu_usage(),
             uptime: self.system.uptime(),
             memory_total: self.system.total_memory(),
