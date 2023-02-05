@@ -21,3 +21,10 @@ tui = "0.19.0" #console tui
 dirs ="4.0.0" #for load config from home
 toml = "0.7.1" #for config
 serde="1.0.152" #for config
+image="0.24.5" #for icon
+
+[target.'cfg(windows)'.dependencies]
+winapi = {version = "0.3", features = ["wincon", "winuser"]}
+
+[build-dependencies]
+embed-resource="1.8.0" #for icon

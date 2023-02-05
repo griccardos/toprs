@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use dioxus::prelude::*;
-use dioxus_desktop::{use_eval, Config, PhysicalSize, WindowBuilder};
+use dioxus_desktop::{tao::window::Icon, use_eval, Config, PhysicalSize, WindowBuilder};
 
 use crate::{
     helpers::{nice_size_g_thousands, nice_size_thousands, nice_time},
@@ -11,14 +11,31 @@ use crate::{
     svgmaker,
 };
 
+///Hide console window because we are running gui
+fn hide_console_window() {
+    use std::ptr;
+    use winapi::um::wincon::GetConsoleWindow;
+    use winapi::um::winuser::{ShowWindow, SW_HIDE};
+    let window = unsafe { GetConsoleWindow() };
+    if window != ptr::null_mut() {
+        unsafe {
+            ShowWindow(window, SW_HIDE);
+        }
+    }
+}
+
 pub fn run() {
+    #[cfg(target_os = "windows")]
+    hide_console_window();
+
     let index = include_str!("index.html").to_string();
     let index = index.replace("PLOTLYSCRIPT", include_str!("plotly-2.18.0.min.js"));
 
     let config = Config::default().with_custom_index(index).with_window(
         WindowBuilder::new()
             .with_title("toprs")
-            .with_inner_size(PhysicalSize::new(1500, 1000)),
+            .with_inner_size(PhysicalSize::new(1500, 1000))
+            .with_window_icon(Some(load_icon())),
     );
     dioxus_desktop::launch_cfg(app, config);
 }
@@ -113,26 +130,27 @@ fn app(cx: Scope) -> Element {
         h2 {"Memory analysis"}
         div{
             "Live update"
-        input{ r#type: "checkbox",
-        checked:"{live}",
+        input{ 
+            style:"margin-left:20px",
+            r#type: "checkbox",
+            checked:"{live}",
             oninput:move|_|{
                 let old=*live.current();
                 live.set(!old);
-                let new =*live.current();
-                println!("changing Live from {} to {}",old,new);
             }
 
         }
         }
 
-
-        div{"Max depth:"},
-        input{
-            r#type:"number",
-            value:"{max_depth}",
-            oninput:move |a|{
-                let val = a.value.parse::<usize>().unwrap_or(100);
-                max_depth.set(val)
+        div{"Max depth:",
+            input{
+                style:"margin-left:20px",
+                r#type:"number",
+                value:"{max_depth}",
+                oninput:move |a|{
+                    let val = a.value.parse::<usize>().unwrap_or(100);
+                    max_depth.set(val)
+                }
             }
         }
            div{
@@ -287,4 +305,17 @@ fn sort_name(name: &str, col: usize, sorted: &UseRef<SortedProcesses>) -> String
     };
 
     format!("{name}{sym}")
+}
+
+fn load_icon() -> Icon {
+    let (icon_rgba, icon_width, icon_height) = {
+        let image = image::load_from_memory(include_bytes!("../icon.png"))
+            .unwrap()
+            .into_rgba8();
+        let (width, height) = image.dimensions();
+        let rgba = image.into_raw();
+        (rgba, width, height)
+    };
+
+    Icon::from_rgba(icon_rgba, icon_width, icon_height).unwrap()
 }

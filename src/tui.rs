@@ -4,7 +4,9 @@ use std::{
 };
 
 use crossterm::{
-    event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyModifiers},
+    event::{
+        self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind, KeyModifiers,
+    },
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
@@ -227,12 +229,6 @@ fn draw_table(f: &mut Frame<CrosstermBackend<Stdout>>, state: &State, tablestate
     ];
     let t = Table::new(rows)
         .header(header_cells)
-        //.block(
-        //    Block::default()
-        //        .borders(Borders::ALL)
-        //        .title("Processes")
-        //        .border_type(tui::widgets::BorderType::Rounded),
-        //)
         .widths(&widths)
         .highlight_style(Style::default().bg(Color::LightYellow).fg(Color::Black));
 
@@ -245,49 +241,51 @@ fn draw_table(f: &mut Frame<CrosstermBackend<Stdout>>, state: &State, tablestate
 fn handle_input(done: &mut bool, state: &mut State) {
     if event::poll(Duration::from_millis(10)).unwrap() {
         if let Ok(Event::Key(key)) = event::read() {
-            match key.code {
-                KeyCode::Char('q') | KeyCode::Esc => *done = true,
-                KeyCode::Char('s') => {
-                    state.visible.sort_cycle();
-                    state.sort();
-                }
-                KeyCode::Char('c') => {
-                    if KeyModifiers::CONTROL.contains(key.modifiers) {
-                        *done = true
+            if key.kind == KeyEventKind::Press {
+                match key.code {
+                    KeyCode::Char('q') | KeyCode::Esc => *done = true,
+                    KeyCode::Char('s') => {
+                        state.visible.sort_cycle();
+                        state.sort();
                     }
-                }
-                KeyCode::Char('z') => state.visible.hidezeros = !state.visible.hidezeros,
-                KeyCode::Char('h') | KeyCode::Char('?') => state.help = !state.help,
-                KeyCode::Char('g') => {
-                    *done = true;
-                    state.start_gui = true
-                }
-                KeyCode::Down => {
-                    state.selected = (state.selected + 1).min(state.visible.procs().len() - 1)
-                }
-                KeyCode::Up => state.selected = state.selected.saturating_sub(1),
-                KeyCode::PageDown => {
-                    state.selected = (state.selected + 20).min(state.visible.procs().len() - 1)
-                }
-                KeyCode::PageUp => state.selected = state.selected.saturating_sub(20),
-                KeyCode::Home => state.selected = 0,
-                KeyCode::End => state.selected = state.visible.procs().len() - 1,
+                    KeyCode::Char('c') => {
+                        if KeyModifiers::CONTROL.contains(key.modifiers) {
+                            *done = true
+                        }
+                    }
+                    KeyCode::Char('z') => state.visible.hidezeros = !state.visible.hidezeros,
+                    KeyCode::Char('h') | KeyCode::Char('?') => state.help = !state.help,
+                    KeyCode::Char('g') => {
+                        *done = true;
+                        state.start_gui = true
+                    }
+                    KeyCode::Down => {
+                        state.selected = (state.selected + 1).min(state.visible.procs().len() - 1)
+                    }
+                    KeyCode::Up => state.selected = state.selected.saturating_sub(1),
+                    KeyCode::PageDown => {
+                        state.selected = (state.selected + 20).min(state.visible.procs().len() - 1)
+                    }
+                    KeyCode::PageUp => state.selected = state.selected.saturating_sub(20),
+                    KeyCode::Home => state.selected = 0,
+                    KeyCode::End => state.selected = state.visible.procs().len() - 1,
 
-                KeyCode::Left => {
-                    state.visible.sort_col = state.visible.sort_col.saturating_sub(1);
-                    if state.visible.sort_col == 0 {
-                        state.visible.sort_type = SortType::None;
+                    KeyCode::Left => {
+                        state.visible.sort_col = state.visible.sort_col.saturating_sub(1);
+                        if state.visible.sort_col == 0 {
+                            state.visible.sort_type = SortType::None;
+                        }
+                        state.sort();
                     }
-                    state.sort();
-                }
-                KeyCode::Right => {
-                    state.visible.sort_col = (state.visible.sort_col + 1).min(6);
-                    if state.visible.sort_col > 0 && state.visible.sort_type == SortType::None {
-                        state.visible.sort_type = SortType::Descending;
+                    KeyCode::Right => {
+                        state.visible.sort_col = (state.visible.sort_col + 1).min(6);
+                        if state.visible.sort_col > 0 && state.visible.sort_type == SortType::None {
+                            state.visible.sort_type = SortType::Descending;
+                        }
+                        state.sort();
                     }
-                    state.sort();
+                    _ => {}
                 }
-                _ => {}
             }
         }
     }
