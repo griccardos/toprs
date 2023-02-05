@@ -1,12 +1,12 @@
 [package]
 name = "toprs"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 description = "Cross platform memory focused top"
 repository =  "https://github.com/griccardos/toprs/"
 readme = "README.md"
 keywords = ["top", "memory","cpu","usage"]
-categories = ["Command line utilities","Visualization"]
+categories = ["command-line-utilities","visualization"]
 license = "MIT"
 
 [dependencies]

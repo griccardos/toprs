@@ -36,8 +36,8 @@ struct Args {
 
 #[derive(Deserialize)]
 enum Mode {
-    GUI,
-    TUI,
+    Gui,
+    Tui,
 }
 
 #[derive(Deserialize)]
@@ -60,8 +60,8 @@ fn main() {
     } else {
         //no arguments so we try load config or default
         match config.mode {
-            Mode::GUI => gui::run(),
-            Mode::TUI => run_tui(),
+            Mode::Gui => gui::run(),
+            Mode::Tui => run_tui(),
         }
     }
 }
@@ -100,7 +100,7 @@ fn get_config() -> Config {
     }
 
     //default
-    Config { mode: Mode::TUI }
+    Config { mode: Mode::Tui }
 }
 
 fn run_output() {

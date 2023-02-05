@@ -1,5 +1,4 @@
 ## toprs
-
 Cross platform alternative top with a focus on analysing memory usage.
 In addition to each process having only their memory usage, it also has the sum of all child process memory usage. 
 
@@ -8,13 +7,13 @@ Install via
 `$ cargo install toprs`  
 Run `toprs` for console or `toprs -g` for gui
 
-If you want to always run as gui, add the following to your config file located
+If you want to always run as Gui mode, add the following to your config file located
 - `~/.config/toprs/config.toml` 
 - `c:\Users\Name\.config\toprs\config.toml` 
 - `/etc/toprs/config.toml` 
 
 ```toml
-mode="GUI"
+mode="Gui"
 ```
 
 
@@ -45,7 +44,7 @@ Both Sunburst and Flamegraph indicate top 5 (own memory) processes in Red, and t
 Flamegraph blue portion is child memory, and red/yellow is its own memory
 
 
-### tested on
+### Tested on
 - [X] Linux
 - [X] Windows 10
 - [X] MacOS

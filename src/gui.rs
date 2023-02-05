@@ -14,11 +14,10 @@ use crate::{
 ///Hide console window because we are running gui
 #[cfg(target_os = "windows")]
 fn hide_console_window() {
-    use std::ptr;
     use winapi::um::wincon::GetConsoleWindow;
     use winapi::um::winuser::{ShowWindow, SW_HIDE};
     let window = unsafe { GetConsoleWindow() };
-    if window != ptr::null_mut() {
+    if !window.is_null()  {
         unsafe {
             ShowWindow(window, SW_HIDE);
         }
