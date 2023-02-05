@@ -48,7 +48,7 @@ Flamegraph blue portion is child memory, and red/yellow is its own memory
 ### tested on
 - [X] Linux
 - [X] Windows 10
-- [ ] MacOS
+- [X] MacOS
 
 
 ### FAQ
