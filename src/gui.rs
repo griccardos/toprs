@@ -245,7 +245,8 @@ fn get_labels_parents_values(
         .iter()
         .map(|f| {
             format!(
-                r#""own:{} total:{}""#,
+                r#""{} own:{} total:{}""#,
+                f.name,
                 nice_size_thousands(f.memory),
                 nice_size_thousands(f.total())
             )

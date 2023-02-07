@@ -95,8 +95,26 @@ fn update_procs(sys: &mut System) -> Vec<MyProcess> {
             }
         })
         .filter(|x| x.pid != 0) //dont want root or errors
-        //.filter(|x| x.pid == 9536 || x.parent == 9536 || x.parent == 0)
         .collect::<Vec<MyProcess>>();
+
+    //break cycle loops parent 1 -> child 2 -> parent 1
+    //not sure why this happens, possibly reuse of pid's
+    //if there is a loop, we make the lowest pid's parent, equal to 0
+    //using lowest pid is not entirely correct, but we must break cycle somewhere
+    //TODO: find actual parent which no longer exists
+    let mut change = HashSet::new();
+    for proc in procs.iter() {
+        let parents = parents_limited(proc.pid, &procs, HashSet::new());
+        //if parents contains this pid, this pid is looped, so we make it 0 if it is the lowest
+        if parents.contains(&proc.pid) && parents.iter().min().unwrap() == &proc.pid {
+            change.insert(proc.pid);
+        }
+    }
+    for proc in procs.iter_mut() {
+        if change.contains(&proc.pid) {
+            proc.parent = 0;
+        }
+    }
 
     //calc depth
     for pi in 0..procs.len() {
@@ -133,5 +151,23 @@ fn depth(pid: usize, procs: &[MyProcess]) -> usize {
         if depth > 1000 {
             return 0;
         }
+    }
+}
+
+///This finds all parents
+/// if there is a loop, it returns
+fn parents_limited(pid: usize, procs: &[MyProcess], mut parents: HashSet<usize>) -> HashSet<usize> {
+    let proc = procs.iter().find(|x| x.pid == pid);
+    let parent = if let Some(proc) = proc {
+        proc.parent
+    } else {
+        0
+    };
+
+    if parents.contains(&parent) {
+        parents
+    } else {
+        parents.insert(parent);
+        parents_limited(parent, procs, parents)
     }
 }

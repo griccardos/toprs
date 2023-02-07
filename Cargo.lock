@@ -2791,7 +2791,7 @@ dependencies = [
 
 [[package]]
 name = "toprs"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "crossterm 0.26.0",
  "dioxus",
