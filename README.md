@@ -1,5 +1,5 @@
 ## toprs
-Cross platform alternative top with a focus on analysing memory usage.
+Cross platform alternative to `top` with a focus on analysing memory usage.
 In addition to each process having only their memory usage, it also has the sum of all child process memory usage. 
 
 ## running
@@ -42,13 +42,6 @@ Processes are listed like in TUI mode, but there is also a memory analysis secti
 Sunburst mode allows you to click on a process to drill down. You can increase or decrease the max depth to your preference. 
 Both Sunburst and Flamegraph indicate top 5 (own memory) processes in Red, and the rest in fading yellow, depending on amount.
 Flamegraph blue portion is child memory, and red/yellow is its own memory
-
-
-### Tested on
-- [X] Linux
-- [X] Windows 10
-- [X] MacOS
-
 
 ### FAQ
 - What memory is it using?

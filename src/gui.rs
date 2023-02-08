@@ -82,6 +82,16 @@ fn app(cx: Scope) -> Element {
         }
 
         div{
+            "Filter"
+        input{ 
+            style:"margin-left:20px",
+            oninput:move|a|{
+                visible.write().set_filter(a.value.clone());
+            }
+
+        }
+        }
+        div{
             style:"height:300px;overflow:auto",
         table{
             class:"tproc",
@@ -108,7 +118,8 @@ fn app(cx: Scope) -> Element {
             }
             }
             tbody{
-                    for pr in  visible.read().procs(){
+                
+                    for pr in  visible.read().procs().iter(){
                 tr{
                         rsx!(
                             td{title:"{pr[0]}",class:"tcell ","{pr[0]}"}
@@ -312,6 +323,7 @@ fn load_icon() -> Icon {
     let (icon_rgba, icon_width, icon_height) = {
         let image = image::load_from_memory(include_bytes!("../icon.png"))
             .unwrap()
+            .resize(32, 32, image::imageops::FilterType::Gaussian)
             .into_rgba8();
         let (width, height) = image.dimensions();
         let rgba = image.into_raw();

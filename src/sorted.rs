@@ -12,7 +12,7 @@ pub struct SortedProcesses {
     pub sort_col: usize,
     pub sort_type: SortType,
     pub hidezeros: bool,
-
+    pub filter: String,
     procs: Vec<MyProcess>,
 }
 
@@ -23,7 +23,12 @@ impl SortedProcesses {
             sort_type: SortType::None,
             procs: vec![],
             hidezeros: true,
+            filter: String::new(),
         }
+    }
+
+    pub fn set_filter(&mut self, str: String) {
+        self.filter = str;
     }
 
     pub fn update(&mut self, procs: &[MyProcess]) {
@@ -34,6 +39,13 @@ impl SortedProcesses {
         self.procs
             .iter()
             .filter(|f| if self.hidezeros { f.memory != 0 } else { true })
+            .filter(|x| {
+                if self.filter.is_empty() {
+                    true
+                } else {
+                    x.name.to_lowercase().contains(&self.filter.to_lowercase())
+                }
+            })
             .map(|f| {
                 vec![
                     f.command.clone(),

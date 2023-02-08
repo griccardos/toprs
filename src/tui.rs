@@ -34,6 +34,8 @@ struct State {
     top5cpu: Vec<usize>,
     help: bool,
     start_gui: bool,
+    filter: String,
+    filtering: bool,
 }
 
 pub fn run() -> Result<bool, std::io::Error> {
@@ -49,6 +51,8 @@ pub fn run() -> Result<bool, std::io::Error> {
         top5cpu: vec![],
         help: false,
         start_gui: false,
+        filter: String::new(),
+        filtering: false,
     };
     state.sort();
     execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
@@ -76,6 +80,7 @@ pub fn run() -> Result<bool, std::io::Error> {
             if state.help {
                 draw_help(f);
             }
+            draw_filter(f, &state);
 
             handle_input(&mut done, &mut state);
 
@@ -94,6 +99,17 @@ pub fn run() -> Result<bool, std::io::Error> {
     Ok(state.start_gui)
 }
 
+fn draw_filter(f: &mut Frame<CrosstermBackend<Stdout>>, state: &State) {
+    if state.filtering || !state.filter.is_empty() {
+        let mut style = Style::default();
+        if state.filtering {
+            style = style.bg(Color::Green).fg(Color::Black);
+        }
+
+        let p = Paragraph::new(format!("Filter: {}", state.filter)).style(style);
+        f.render_widget(p, Rect::new(0, 3, 40, 1));
+    }
+}
 fn draw_help(f: &mut Frame<CrosstermBackend<Stdout>>) {
     let help = r#"?/h        Help menu                           
 Up         Scroll up                      
@@ -106,7 +122,7 @@ z          Hide/show zero memory
 Home       Go to first row                
 End        Go to last row                  
 g          Start gui mode                       
-                                                       
+f          Filter processes                                                       
 command line arguments for modes:               
 -g         GUI                                           
 -t         Terminal mode                               
@@ -242,49 +258,68 @@ fn handle_input(done: &mut bool, state: &mut State) {
     if event::poll(Duration::from_millis(10)).unwrap() {
         if let Ok(Event::Key(key)) = event::read() {
             if key.kind == KeyEventKind::Press {
-                match key.code {
-                    KeyCode::Char('q') | KeyCode::Esc => *done = true,
-                    KeyCode::Char('s') => {
-                        state.visible.sort_cycle();
-                        state.sort();
-                    }
-                    KeyCode::Char('c') => {
-                        if KeyModifiers::CONTROL.contains(key.modifiers) {
-                            *done = true
+                if state.filtering {
+                    match key.code {
+                        KeyCode::Esc | KeyCode::Enter => state.filtering = false,
+                        KeyCode::Char(c) => state.filter.push(c),
+                        KeyCode::Backspace => {
+                            let _ = state.filter.pop();
                         }
+                        _ => {}
                     }
-                    KeyCode::Char('z') => state.visible.hidezeros = !state.visible.hidezeros,
-                    KeyCode::Char('h') | KeyCode::Char('?') => state.help = !state.help,
-                    KeyCode::Char('g') => {
-                        *done = true;
-                        state.start_gui = true
-                    }
-                    KeyCode::Down => {
-                        state.selected = (state.selected + 1).min(state.visible.procs().len() - 1)
-                    }
-                    KeyCode::Up => state.selected = state.selected.saturating_sub(1),
-                    KeyCode::PageDown => {
-                        state.selected = (state.selected + 20).min(state.visible.procs().len() - 1)
-                    }
-                    KeyCode::PageUp => state.selected = state.selected.saturating_sub(20),
-                    KeyCode::Home => state.selected = 0,
-                    KeyCode::End => state.selected = state.visible.procs().len() - 1,
+                    state.visible.set_filter(state.filter.clone());
+                } else {
+                    match key.code {
+                        KeyCode::Char('q') | KeyCode::Esc => *done = true,
+                        KeyCode::Char('s') => {
+                            state.visible.sort_cycle();
+                            state.sort();
+                        }
+                        KeyCode::Char('c') => {
+                            if KeyModifiers::CONTROL.contains(key.modifiers) {
+                                *done = true
+                            }
+                        }
+                        KeyCode::Char('f') => {
+                            state.filtering = !state.filtering;
+                        }
+                        KeyCode::Char('z') => state.visible.hidezeros = !state.visible.hidezeros,
+                        KeyCode::Char('h') | KeyCode::Char('?') => state.help = !state.help,
+                        KeyCode::Char('g') => {
+                            *done = true;
+                            state.start_gui = true
+                        }
+                        KeyCode::Down => {
+                            state.selected =
+                                (state.selected + 1).min(state.visible.procs().len() - 1)
+                        }
+                        KeyCode::Up => state.selected = state.selected.saturating_sub(1),
+                        KeyCode::PageDown => {
+                            state.selected =
+                                (state.selected + 20).min(state.visible.procs().len() - 1)
+                        }
+                        KeyCode::PageUp => state.selected = state.selected.saturating_sub(20),
+                        KeyCode::Home => state.selected = 0,
+                        KeyCode::End => state.selected = state.visible.procs().len() - 1,
 
-                    KeyCode::Left => {
-                        state.visible.sort_col = state.visible.sort_col.saturating_sub(1);
-                        if state.visible.sort_col == 0 {
-                            state.visible.sort_type = SortType::None;
+                        KeyCode::Left => {
+                            state.visible.sort_col = state.visible.sort_col.saturating_sub(1);
+                            if state.visible.sort_col == 0 {
+                                state.visible.sort_type = SortType::None;
+                            }
+                            state.sort();
                         }
-                        state.sort();
-                    }
-                    KeyCode::Right => {
-                        state.visible.sort_col = (state.visible.sort_col + 1).min(6);
-                        if state.visible.sort_col > 0 && state.visible.sort_type == SortType::None {
-                            state.visible.sort_type = SortType::Descending;
+                        KeyCode::Right => {
+                            state.visible.sort_col = (state.visible.sort_col + 1).min(6);
+                            if state.visible.sort_col > 0
+                                && state.visible.sort_type == SortType::None
+                            {
+                                state.visible.sort_type = SortType::Descending;
+                            }
+                            state.sort();
                         }
-                        state.sort();
+                        _ => {}
                     }
-                    _ => {}
                 }
             }
         }
