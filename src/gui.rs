@@ -48,7 +48,7 @@ fn app(cx: Scope) -> Element {
     let totals = man.read().get_totals();
     let mem = nice_size_g_thousands(totals.memory);
     let totmem = nice_size_g_thousands(totals.memory_total);
-    let cpu = format!("{:.1}%", totals.cpu);
+    let cpu = format!("{:5>.1}%", totals.cpu_avg);
     let uptime = nice_time(totals.uptime);
     let eval = use_eval(cx);
     let live = use_state(cx, || true);

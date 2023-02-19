@@ -1,6 +1,6 @@
 [package]
 name = "toprs"
-version = "0.3.2"
+version = "0.3.3"
 edition = "2021"
 description = "Cross platform memory focused top"
 repository =  "https://github.com/griccardos/toprs/"
@@ -15,7 +15,7 @@ dioxus = "0.3.1" #gui
 dioxus-desktop = "0.3.0" #gui
 formato = "0.2.0" #format numbers
 gumdrop = "0.8.1" #arguments
-sysinfo = "0.27.7" #get system info
+sysinfo = "0.28.0" #get system info
 tokio = { version = "1.25.0", features = ["time"] } #sleep
 tui = "0.19.0" #console tui
 dirs ="4.0.0" #for load config from home

@@ -156,8 +156,8 @@ fn draw_top(f: &mut Frame<CrosstermBackend<Stdout>>, state: &State) {
     f.render_widget(mem, Rect::new(0, 0, f.size().width, 1));
 
     let gr = LineGauge::default()
-        .label(format!("Cpu: {:.2}%", totals.cpu))
-        .ratio(totals.cpu as f64 / 100.)
+        .label(format!("Cpu: {:.1}%", totals.cpu_avg))
+        .ratio(totals.cpu_avg as f64 / 100.)
         .line_set(tui::symbols::line::THICK)
         .gauge_style(Style::default().fg(Color::White).bg(Color::LightBlue));
 

@@ -49,6 +49,19 @@ Flamegraph blue portion is child memory, and red/yellow is its own memory
     - In Linux this is the "resident" memory i.e. used physical memory
 
 
+### Dependencies
+- Linux:
+    - `apt install libwebkit2gtk-4.0-37` (as per tauri)
+    - `apt install libwebkit2gtk-4.0-dev`
+    - `apt install libgtk-3-0` (as per tauri)
+    - `apt install libgtk-3-dev`
+    - `apt install libjavascriptcoregtk-4.0-dev`
+    - `apt install libpango1.0-dev`
+    - `apt install libatk1.0-dev`
+    - `apt install libsoup-gnome2.4-dev`
+    
+
+
 ### Thanks
 Shoutout to the following projects that made this possible:
 - rust Sysinfo lib
