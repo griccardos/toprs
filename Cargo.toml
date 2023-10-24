@@ -1,6 +1,6 @@
 [package]
 name = "toprs"
-version = "0.3.3"
+version = "0.3.4"
 edition = "2021"
 description = "Cross platform memory focused top"
 repository =  "https://github.com/griccardos/toprs/"
@@ -9,18 +9,22 @@ keywords = ["top", "memory","cpu","usage"]
 categories = ["command-line-utilities","visualization"]
 license = "MIT"
 
+[features]
+default = ["gui"]
+gui = ["dep:dioxus","dep:dioxus-desktop"]
+
 [dependencies]
-crossterm = "0.26.0"
-dioxus = "0.3.1" #gui
-dioxus-desktop = "0.3.0" #gui
+crossterm = "0.27"
+dioxus = {version="0.3.1", optional=true} #gui
+dioxus-desktop ={version= "0.3.0",optional=true} #gui
 formato = "0.2.0" #format numbers
 gumdrop = "0.8.1" #arguments
-sysinfo = "0.28.0" #get system info
-tokio = { version = "1.25.0", features = ["time"] } #sleep
+sysinfo = "0.29" #get system info
+tokio = { version = "1", features = ["time"] } #sleep
 tui = "0.19.0" #console tui
-dirs ="4.0.0" #for load config from home
-toml = "0.7.1" #for config
-serde="1.0.152" #for config
+dirs ="5" #for load config from home
+toml = "0.8" #for config
+serde={version="1.0.152",features=["derive"]} #for config
 image="0.24.5" #for icon
 
 [target.'cfg(windows)'.dependencies]

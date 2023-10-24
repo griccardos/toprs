@@ -3,8 +3,10 @@ Cross platform alternative to `top` with a focus on analysing memory usage.
 In addition to each process having only their memory usage, it also has the sum of all child process memory usage. 
 
 ## running
-Install via
+Install via for tui and gui:  
 `$ cargo install toprs`  
+or with tui only and no gui:  
+`$ cargo install toprs --no-default-features`  
 Run `toprs` for console or `toprs -g` for gui
 
 If you want to always run as Gui mode, add the following to your config file located
@@ -50,7 +52,7 @@ Flamegraph blue portion is child memory, and red/yellow is its own memory
 
 
 ### Dependencies
-- Linux:
+- Linux (for gui feature):
     - `apt install libwebkit2gtk-4.0-37` (as per tauri)
     - `apt install libwebkit2gtk-4.0-dev`
     - `apt install libgtk-3-0` (as per tauri)

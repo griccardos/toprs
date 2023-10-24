@@ -1,3 +1,4 @@
+#[cfg(feature = "gui")]
 mod gui;
 mod helpers;
 mod manager;
@@ -52,7 +53,7 @@ fn main() {
     if let Some(path) = ops.svg {
         draw_flamegraph(path);
     } else if ops.gui {
-        gui::run();
+        run_gui();
     } else if ops.tui {
         run_tui();
     } else if ops.out {
@@ -60,18 +61,25 @@ fn main() {
     } else {
         //no arguments so we try load config or default
         match config.mode {
-            Mode::Gui => gui::run(),
+            Mode::Gui => run_gui(),
             Mode::Tui => run_tui(),
         }
     }
 }
 
+fn run_gui() {
+    if cfg!(feature = "gui") {
+        #[cfg(feature = "gui")]
+        gui::run();
+    } else {
+        println!("gui feature not enabled");
+    }
+}
+
 ///run tui, might also request to go to gui within tui
 fn run_tui() {
-    if let Ok(run_gui) = tui::run() {
-        if run_gui {
-            gui::run();
-        }
+    if let Err(err) = tui::run() {
+        println!("error: {}", err);
     }
 }
 
