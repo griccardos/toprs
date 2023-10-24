@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use dioxus::prelude::*;
-use dioxus_desktop::{tao::window::Icon, use_eval, Config, PhysicalSize, WindowBuilder};
+use dioxus_desktop::{tao::window::Icon, Config, PhysicalSize, WindowBuilder};
 
 use crate::{
     helpers::{nice_size_g_thousands, nice_size_thousands, nice_time},
@@ -17,7 +17,7 @@ fn hide_console_window() {
     use winapi::um::wincon::GetConsoleWindow;
     use winapi::um::winuser::{ShowWindow, SW_HIDE};
     let window = unsafe { GetConsoleWindow() };
-    if !window.is_null()  {
+    if !window.is_null() {
         unsafe {
             ShowWindow(window, SW_HIDE);
         }
@@ -75,53 +75,58 @@ fn app(cx: Scope) -> Element {
     });
 
     cx.render(rsx!(
-        table{
-            tr{td{width:"100px", "Memory"},td{class:"tot","{mem}/{totmem}"}}
-            tr{td{ "Cpu"},td{class:"tot","{cpu}"}}
-            tr{td{"Uptime"},td{class:"tot","{uptime}"}}
+        table {
+            tr {
+                td { width: "100px", "Memory" }
+                td { class: "tot", "{mem}/{totmem}" }
+            }
+            tr {
+                td { "Cpu" }
+                td { class: "tot", "{cpu}" }
+            }
+            tr {
+                td { "Uptime" }
+                td { class: "tot", "{uptime}" }
+            }
         }
 
-        div{
+        div {
             "Filter"
-        input{ 
-            style:"margin-left:20px",
-            oninput:move|a|{
-                visible.write().set_filter(a.value.clone());
+            input {
+                style: "margin-left:20px",
+                oninput: move |a| {
+                    visible.write().set_filter(a.value.clone());
+                }
             }
-
         }
-        }
-        div{
-            style:"height:300px;overflow:auto",
-        table{
-            class:"tproc",
-            thead{
-                tr{
-                    class:"thead",
-                    for (i,p) in ["Command","Name","PID","Memory","Children","Total","CPU"].iter().enumerate(){
-                        td{onclick:move |_|{
-                            if visible.read().sort_col==i{
-                            visible.write().sort_cycle();
-                            }else{
-                            visible.write().sort_col=i;
+        div { style: "height:300px;overflow:auto",
+            table { class: "tproc",
+                thead {
+                    tr { class: "thead",
+                        for (i , p) in ["Command", "Name", "PID", "Memory", "Children", "Total", "CPU"].iter().enumerate() {
+                            td {
+                                onclick: move |_| {
+                                    if visible.read().sort_col == i {
+                                        visible.write().sort_cycle();
+                                    } else {
+                                        visible.write().sort_col = i;
+                                    }
+                                    if visible.read().sort_type == SortType::None && i > 0 {
+                                        visible.write().sort_cycle();
+                                    }
+                                    visible.write().update(man.read().procs());
+                                },
+                                style: if i == 0 { "width:700px" } else if i == 1 { "width:266px" } else { "width:90px" },
+                                class: if i < 2 { "" } else { "tright" },
+                                sort_name(p,i,visible)
                             }
-                            if visible.read().sort_type==SortType::None && i>0{
-                                visible.write().sort_cycle();
-                            }
-                            visible.write().update(man.read().procs());
-                        },
-                        style: if i==0{"width:700px"}else if i==1{"width:266px"}else{"width:90px"},
-                        class: if i<2{""}else{"tright"}, 
-                        sort_name(p,i,visible)
+                        }
                     }
-                    }
-            }
-            }
-            tbody{
-                
-                    for pr in  visible.read().procs().iter(){
-                tr{
-                        rsx!(
+                }
+                tbody {
+                    for pr in visible.read().procs().iter() {
+                        tr {
+                            rsx!(
                             td{title:"{pr[0]}",class:"tcell ","{pr[0]}"}
                             td{title:"{pr[1]}",class:"tcell ","{pr[1]}"}
                             td{class:"tcell tright","{pr[2]}"}
@@ -130,54 +135,46 @@ fn app(cx: Scope) -> Element {
                             td{class:"tcell tright","{pr[5]}"}
                             td{class:"tcell tright","{pr[6]}"}
                         )
+                        }
                     }
                 }
-
             }
-
-        }
         }
 
-        h2 {"Memory analysis"}
-        div{
+        h2 { "Memory analysis" }
+        div {
             "Live update"
-        input{ 
-            style:"margin-left:20px",
-            r#type: "checkbox",
-            checked:"{live}",
-            oninput:move|_|{
-                let old=*live.current();
-                live.set(!old);
+            input {
+                style: "margin-left:20px",
+                r#type: "checkbox",
+                checked: "{live}",
+                oninput: move |_| {
+                    let old = *live.current();
+                    live.set(!old);
+                }
             }
-
-        }
         }
 
-        div{"Max depth:",
-            input{
-                style:"margin-left:20px",
-                r#type:"number",
-                value:"{max_depth}",
-                oninput:move |a|{
+        div {
+            "Max depth:"
+            input {
+                style: "margin-left:20px",
+                r#type: "number",
+                value: "{max_depth}",
+                oninput: move |a| {
                     let val = a.value.parse::<usize>().unwrap_or(100);
                     max_depth.set(val)
                 }
             }
         }
-           div{
-               id:"myDiv",
-        },
-        div{
-            dangerous_inner_html:"{my_svg}"
-        }
-
-
+        div { id: "myDiv" }
+        div { dangerous_inner_html: "{my_svg}" }
     ))
 }
 
 fn update_sunburst(
     man: &UseRef<ProcManager>,
-    eval: &std::rc::Rc<dyn Fn(String) -> dioxus_desktop::EvalResult>,
+    eval: &std::rc::Rc<dyn Fn(&str) -> Result<UseEval, EvalError>>,
     max: &UseState<usize>,
 ) {
     let (l, p, v, t, m, c) = get_labels_parents_values(man.read().procs());
@@ -218,7 +215,7 @@ fn update_sunburst(
         .replace("META", &m)
         .replace("COLORS", &c)
         .replace("MAXDEPTHVALUE", &max.get().to_string());
-    eval(js);
+    let _ = eval(&js);
 }
 
 fn proc_label(proc: &MyProcess) -> String {

@@ -15,8 +15,8 @@ gui = ["dep:dioxus","dep:dioxus-desktop"]
 
 [dependencies]
 crossterm = "0.27"
-dioxus = {version="0.3.1", optional=true} #gui
-dioxus-desktop ={version= "0.3.0",optional=true} #gui
+dioxus = {version="0.4", optional=true} #gui
+dioxus-desktop ={version= "0.4",optional=true} #gui
 formato = "0.2.0" #format numbers
 gumdrop = "0.8.1" #arguments
 sysinfo = "0.29" #get system info
