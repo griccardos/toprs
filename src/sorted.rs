@@ -94,6 +94,9 @@ impl SortedProcesses {
         //get procs, and list of their children, sort by memtotal
         //this should put tree in order
         let ordered = children_of(0, procs, 0);
+        if ordered.len() == 0 {
+            return;
+        }
 
         //difficult part is determining look of the tree:
         // if it has a sibling before, or parent it needs up

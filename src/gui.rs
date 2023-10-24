@@ -48,11 +48,17 @@ fn app(cx: Scope) -> Element {
     let totals = man.read().get_totals();
     let mem = nice_size_g_thousands(totals.memory);
     let totmem = nice_size_g_thousands(totals.memory_total);
-    let cpu = format!("{:5>.1}%", totals.cpu_avg);
+    let cpu = format!("{:5>.1}% x{}", totals.cpu_avg, totals.cpu_count);
+    let cpupercent = format!("{:.1}%", totals.cpu_avg);
+    let mempercent = format!(
+        "{:.1}%",
+        totals.memory as f64 / totals.memory_total as f64 * 100.
+    );
     let uptime = nice_time(totals.uptime);
     let eval = use_eval(cx);
     let live = use_state(cx, || true);
     let visible = use_ref(cx, SortedProcesses::new);
+    let processes = use_state(cx, || man.read().procs().len());
 
     update_sunburst(man, eval, max_depth);
 
@@ -69,7 +75,7 @@ fn app(cx: Scope) -> Element {
                     my_svg.set(svgmaker::generate_svg(man.read().procs()));
                     visible.write().update(man.read().procs());
                 }
-                tokio::time::sleep(Duration::from_millis(5000)).await;
+                tokio::time::sleep(Duration::from_millis(2000)).await;
             }
         }
     });
@@ -79,14 +85,24 @@ fn app(cx: Scope) -> Element {
             tr {
                 td { width: "100px", "Memory" }
                 td { class: "tot", "{mem}/{totmem}" }
+                td { class: "col3",
+                    div { class: "loading-bar", div { class: "progress", width: "{mempercent}" } }
+                }
             }
             tr {
                 td { "Cpu" }
                 td { class: "tot", "{cpu}" }
+                td { class: "col3",
+                    div { class: "loading-bar", div { class: "progress", width: "{cpupercent}" } }
+                }
             }
             tr {
                 td { "Uptime" }
                 td { class: "tot", "{uptime}" }
+            }
+            tr {
+                td { "Processes" }
+                td { class: "tot", "{processes}" }
             }
         }
 
@@ -103,7 +119,7 @@ fn app(cx: Scope) -> Element {
             table { class: "tproc",
                 thead {
                     tr { class: "thead",
-                        for (i , p) in ["Command", "Name", "PID", "Memory", "Children", "Total", "CPU"].iter().enumerate() {
+                        for (i , p) in ["Command", "Name", "PID", "Self", "Children", "Total", "CPU"].iter().enumerate() {
                             td {
                                 onclick: move |_| {
                                     if visible.read().sort_col == i {

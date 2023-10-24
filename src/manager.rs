@@ -49,21 +49,13 @@ impl ProcManager {
             .zero_if_nan();
         let cpu_avg = cpu_total / cpu_count as f32;
 
-        /*let proc_sum: f32 = self
-            .system
-            .processes()
-            .iter()
-            .map(|x| x.1.cpu_usage())
-            .sum();
-        println!("cpu: {cpu_total} proc:{proc_sum}");
-        */
-
         Totals {
             memory,
             cpu_avg,
             cpu_total,
             cpu_count,
             cpu_max,
+            cpus,
             uptime: self.system.uptime(),
             memory_total: self.system.total_memory(),
         }
@@ -91,6 +83,7 @@ pub struct Totals {
     pub cpu_max: f32,
     pub cpu_total: f32,
     pub uptime: u64,
+    pub cpus: Vec<f32>,
 }
 
 ///we add up the value of all the children
