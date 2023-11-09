@@ -1,6 +1,6 @@
 [package]
 name = "toprs"
-version = "0.3.4"
+version = "0.3.5"
 edition = "2021"
 description = "Cross platform memory focused top"
 repository =  "https://github.com/griccardos/toprs/"
@@ -31,4 +31,4 @@ image="0.24.5" #for icon
 winapi = {version = "0.3", features = ["wincon", "winuser"]}
 
 [build-dependencies]
-embed-resource="1.8.0" #for icon
+embed-resource="2.4.0" #for icon

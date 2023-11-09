@@ -250,13 +250,15 @@ fn draw_table(f: &mut Frame, state: &State, tablestate: &mut TableState) {
                 };
                 let pid = f[2].parse::<usize>().unwrap();
 
-                let style = if state.top5memory.contains(&pid) && i == 3
-                    || state.top5cpu.contains(&pid) && i == 6
-                {
+                let mut style = if state.top5memory.contains(&pid) && (i == 3 || i < 2) {
                     Style::default().fg(Color::LightRed)
                 } else {
                     Style::default()
                 };
+
+                if state.top5cpu.contains(&pid) && (i == 6 || i < 2) {
+                    style = Style::default().fg(Color::Magenta);
+                }
 
                 let cell = Cell::from(val).style(style);
                 //println!("{cell:?}");
