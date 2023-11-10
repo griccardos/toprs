@@ -159,7 +159,7 @@ fn draw_top(f: &mut Frame, state: &State) {
             if y as u16 >= f.size().height {
                 break;
             }
-            draw_cpu(f, x, y, width, *cp, &format!("{}", i + 1));
+            draw_cpu(f, x, y, width, *cp / 100., &format!("{}", i + 1));
         }
     }
     draw_cpu(
@@ -167,8 +167,8 @@ fn draw_top(f: &mut Frame, state: &State) {
         0,
         cpu_height,
         48,
-        totals.cpu_avg,
-        &format!("Cpu: {:.1}% x{}", totals.cpu_avg, totals.cpu_count),
+        totals.cpu_avg / 100.,
+        &format!("Cpu x{}:", totals.cpu_count),
     );
 
     draw_mem(totals, f, cpu_height + 1);
@@ -181,25 +181,45 @@ fn draw_top(f: &mut Frame, state: &State) {
 }
 
 fn draw_mem(totals: &Totals, f: &mut Frame, y: u16) {
-    let gr = LineGauge::default()
-        .label(format!(
+    gauge(
+        f,
+        0,
+        y,
+        48,
+        totals.memory as f32 / totals.memory_total as f32,
+        &format!(
             "Memory: {}/{}",
             nice_size_g(totals.memory),
             nice_size_g(totals.memory_total)
-        ))
-        .gauge_style(Style::default().fg(Color::White).bg(Color::DarkGray))
-        .ratio(totals.memory as f64 / totals.memory_total as f64);
+        ),
+    )
+}
 
-    f.render_widget(gr, Rect::new(0, y, 48, 1));
+fn gauge(f: &mut Frame, x: u16, y: u16, width: u16, val: f32, title: &str) {
+    let col = if val > 70. {
+        Color::LightRed
+    } else if val > 35. {
+        Color::Yellow
+    } else {
+        Color::White
+    };
+    let gr = LineGauge::default()
+        .label(title)
+        .gauge_style(Style::default().fg(col).bg(Color::Black))
+        .ratio(val as f64);
+
+    f.render_widget(gr, Rect::new(x, y, width, 1));
 }
 
 fn draw_cpu(f: &mut Frame, x: u16, y: u16, width: u16, cpu: f32, title: &str) {
-    let gr = LineGauge::default()
-        .label(format!("{title:>6} {cpu:>5.1}%"))
-        .gauge_style(Style::default().fg(Color::White).bg(Color::DarkGray))
-        .ratio(cpu as f64 / 100.);
-
-    f.render_widget(gr, Rect::new(x, y, width, 1));
+    gauge(
+        f,
+        x,
+        y,
+        width,
+        cpu,
+        &format!("{title:>6} {:>5.1}%", cpu * 100.),
+    );
 }
 
 fn draw_table(f: &mut Frame, state: &State, tablestate: &mut TableState) {
