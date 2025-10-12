@@ -5,14 +5,14 @@ use crossterm::{
         self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind, KeyModifiers,
     },
     execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
 use ratatui::{
+    Frame, Terminal,
     backend::CrosstermBackend,
     layout::{Constraint, Rect},
     style::{Color, Style},
     widgets::{Block, BorderType, Borders, Cell, LineGauge, Paragraph, Row, Table, TableState},
-    Frame, Terminal,
 };
 
 use crate::{
@@ -110,24 +110,24 @@ fn draw_filter(f: &mut Frame, state: &State) {
     }
 }
 fn draw_help(f: &mut Frame) {
-    let help = r#"?/h        Help menu                           
-Up         Scroll up                      
-Down       Scroll down                       
-Left       Sort by column to left            
-Right      Sort by column to right            
-s          Sort Asc/Desc/None                 
-q/Esc      Exit                            
-z          Hide/show zero memory            
-Home       Go to first row                
-End        Go to last row                  
-g          Start gui mode                       
-f          Filter processes          
-c          Hide CPU cores                                             
-command line arguments for modes:               
--g         GUI                                           
--t         Terminal mode                               
--s <FILE>  save svg                            
--o         output to stdout                    
+    let help = r#"?/h        Help menu
+Up         Scroll up
+Down       Scroll down
+Left       Sort by column to left
+Right      Sort by column to right
+s          Sort Asc/Desc/None
+q/Esc      Exit
+z          Hide/show zero memory
+Home       Go to first row
+End        Go to last row
+g          Start gui mode
+f          Filter processes
+c          Hide CPU cores
+command line arguments for modes:
+-g         GUI
+-t         Terminal mode
+-s <FILE>  save svg
+-o         output to stdout
                                              "#;
 
     let p = Paragraph::new(help)
@@ -138,10 +138,10 @@ command line arguments for modes:
                 .title("Help")
                 .border_type(BorderType::Rounded),
         );
-    let x = (f.size().width / 3).max(0);
-    let y = (f.size().height.saturating_sub(help.lines().count() as u16) / 3).max(0);
-    let w = 40.min(f.size().width.saturating_sub(x));
-    let h = 20.min(f.size().height.saturating_sub(y));
+    let x = (f.area().width / 3).max(0);
+    let y = (f.area().height.saturating_sub(help.lines().count() as u16) / 3).max(0);
+    let w = 40.min(f.area().width.saturating_sub(x));
+    let h = 20.min(f.area().height.saturating_sub(y));
     f.render_widget(p, Rect::new(x, y, w, h));
 }
 
@@ -153,10 +153,10 @@ fn draw_top(f: &mut Frame, state: &State) {
     //draw cpus
     if !state.hide_cores {
         for (i, cp) in state.totals.cpus.iter().enumerate() {
-            let width = f.size().width / 4;
+            let width = f.area().width / 4;
             let x = (i % 4) as u16 * width;
             let y = (i / 4) as u16;
-            if y as u16 >= f.size().height {
+            if y as u16 >= f.area().height {
                 break;
             }
             draw_cpu(f, x, y, width, *cp / 100., &format!("{}", i + 1));
@@ -174,10 +174,10 @@ fn draw_top(f: &mut Frame, state: &State) {
     draw_mem(totals, f, cpu_height + 1);
 
     let up = Block::default().title(format!("Uptime: {}", nice_time(state.totals.uptime)));
-    f.render_widget(up, Rect::new(0, cpu_height + 2, f.size().width, 1));
+    f.render_widget(up, Rect::new(0, cpu_height + 2, f.area().width, 1));
 
     let threads = Block::default().title(format!("Processes: {}", state.procs.len()));
-    f.render_widget(threads, Rect::new(0, cpu_height + 3, f.size().width, 1));
+    f.render_widget(threads, Rect::new(0, cpu_height + 3, f.area().width, 1));
 }
 
 fn draw_mem(totals: &Totals, f: &mut Frame, y: u16) {
@@ -205,8 +205,8 @@ fn gauge(f: &mut Frame, x: u16, y: u16, width: u16, val: f32, title: &str) {
     };
     let gr = LineGauge::default()
         .label(title)
-        .gauge_style(Style::default().fg(col).bg(Color::Black))
-        .ratio(val as f64);
+        .filled_style(Style::default().fg(col).bg(Color::Black))
+        .ratio((val as f64) / 100.);
 
     f.render_widget(gr, Rect::new(x, y, width, 1));
 }
@@ -234,7 +234,7 @@ fn draw_table(f: &mut Frame, state: &State, tablestate: &mut TableState) {
                 let mut style = Style::default().fg(Color::Black).bg(Color::LightBlue);
 
                 if i == state.visible.sort_col {
-                    style = Style::default().fg(Color::White).bg(Color::LightMagenta);
+                    style = Style::default().fg(Color::White).bg(Color::LightRed);
 
                     match state.visible.sort_type {
                         SortType::Ascending => {
@@ -288,7 +288,7 @@ fn draw_table(f: &mut Frame, state: &State, tablestate: &mut TableState) {
         })
         .collect();
 
-    let command_width = (f.size().width.max(85) - 85).max(25);
+    let command_width = (f.area().width.max(85) - 85).max(25);
     let widths = [
         Constraint::Min(command_width),
         Constraint::Min(25),
@@ -298,14 +298,13 @@ fn draw_table(f: &mut Frame, state: &State, tablestate: &mut TableState) {
         Constraint::Length(10),
         Constraint::Length(10),
     ];
-    let t = Table::new(rows)
+    let t = Table::new(rows, widths)
         .header(header_cells)
-        .widths(&widths)
-        .highlight_style(Style::default().bg(Color::LightYellow).fg(Color::Black));
+        .row_highlight_style(Style::default().bg(Color::LightYellow).fg(Color::Black));
 
-    let mut rect = f.size();
+    let mut rect = f.area();
     rect.y += top_height;
-    rect.height -= top_height;
+    rect.height = rect.height.saturating_sub(top_height);
     f.render_stateful_widget(t, rect, tablestate);
 }
 

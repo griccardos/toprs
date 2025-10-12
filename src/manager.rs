@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use sysinfo::{CpuExt, CpuRefreshKind, ProcessExt, RefreshKind, System, SystemExt};
+use sysinfo::{CpuRefreshKind, MemoryRefreshKind, RefreshKind, System};
 
 use crate::myprocess::MyProcess;
 
@@ -12,9 +12,9 @@ pub struct ProcManager {
 impl ProcManager {
     pub fn new() -> Self {
         let mut system = System::new_with_specifics(
-            RefreshKind::new()
+            RefreshKind::nothing()
                 .with_cpu(CpuRefreshKind::everything())
-                .with_memory(),
+                .with_memory(MemoryRefreshKind::everything()),
         );
 
         let procs = update_procs(&mut system);
@@ -41,22 +41,15 @@ impl ProcManager {
             .collect();
         let cpu_count = cpus.len();
         let cpu_total: f32 = cpus.iter().sum::<f32>().zero_if_nan();
-        let cpu_max: f32 = cpus
-            .iter()
-            .max_by(|a, b| a.total_cmp(&b))
-            .copied()
-            .unwrap_or(0.)
-            .zero_if_nan();
+
         let cpu_avg = cpu_total / cpu_count as f32;
 
         Totals {
             memory,
             cpu_avg,
-            cpu_total,
             cpu_count,
-            cpu_max,
             cpus,
-            uptime: self.system.uptime(),
+            uptime: System::uptime(),
             memory_total: self.system.total_memory(),
         }
     }
@@ -67,11 +60,7 @@ trait NoNan {
 }
 impl NoNan for f32 {
     fn zero_if_nan(self) -> Self {
-        if self.is_nan() {
-            0.
-        } else {
-            self
-        }
+        if self.is_nan() { 0. } else { self }
     }
 }
 
@@ -80,8 +69,6 @@ pub struct Totals {
     pub memory_total: u64,
     pub cpu_avg: f32,
     pub cpu_count: usize,
-    pub cpu_max: f32,
-    pub cpu_total: f32,
     pub uptime: u64,
     pub cpus: Vec<f32>,
 }
@@ -110,16 +97,18 @@ fn update_procs(sys: &mut System) -> Vec<MyProcess> {
         .processes()
         .iter()
         .map(|x| x.1)
+        .filter(|x| x.thread_kind() != Some(sysinfo::ThreadKind::Userland))
         .map(|x| {
-            let cmd = if x.exe().as_os_str().is_empty() {
-                x.name().to_owned()
-            } else {
-                x.exe().to_string_lossy().to_string()
+            let cmd = match x.exe() {
+                Some(s) if s.as_os_str().is_empty() => x.name().to_string_lossy().to_string(),
+                Some(s) => s.to_string_lossy().to_string(),
+                None => x.name().to_string_lossy().to_string(),
             };
+
             MyProcess {
                 pid: x.pid().into(),
                 parent: x.parent().map_or(0, |f| f.into()),
-                name: x.name().to_owned(),
+                name: x.name().to_string_lossy().to_string(),
                 command: cmd,
                 memory: x.memory(),
                 cpu: x.cpu_usage(),

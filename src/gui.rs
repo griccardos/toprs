@@ -1,7 +1,7 @@
 use std::time::Duration;
 
-use dioxus::prelude::*;
-use dioxus_desktop::{tao::window::Icon, Config, PhysicalSize, WindowBuilder};
+use dioxus::{document::eval, prelude::*};
+use dioxus_desktop::{Config, WindowBuilder, tao::window::Icon, wry::dpi::PhysicalSize};
 
 use crate::{
     helpers::{nice_size_g_thousands, nice_size_thousands, nice_time},
@@ -15,7 +15,7 @@ use crate::{
 #[cfg(target_os = "windows")]
 fn hide_console_window() {
     use winapi::um::wincon::GetConsoleWindow;
-    use winapi::um::winuser::{ShowWindow, SW_HIDE};
+    use winapi::um::winuser::{SW_HIDE, ShowWindow};
     let window = unsafe { GetConsoleWindow() };
     if !window.is_null() {
         unsafe {
@@ -37,14 +37,14 @@ pub fn run() {
             .with_inner_size(PhysicalSize::new(1500, 1000))
             .with_window_icon(Some(load_icon())),
     );
-    dioxus_desktop::launch_cfg(app, config);
+    dioxus_desktop::launch::launch(app, vec![], vec![Box::new(config)]);
 }
 
-fn app(cx: Scope) -> Element {
-    let man = use_ref(cx, ProcManager::new);
-    let my_svg = use_state(cx, || "".to_string());
+fn app() -> Element {
+    let man = use_signal(ProcManager::new);
+    let my_svg = use_signal(|| "".to_string());
     let top5 = get_top5(man.read().procs());
-    let max_depth = use_state(cx, || top5.iter().map(|x| x.depth).max().unwrap_or(5));
+    let mut max_depth = use_signal(|| top5.iter().map(|x| x.depth).max().unwrap_or(5));
     let totals = man.read().get_totals();
     let mem = nice_size_g_thousands(totals.memory);
     let totmem = nice_size_g_thousands(totals.memory_total);
@@ -55,32 +55,28 @@ fn app(cx: Scope) -> Element {
         totals.memory as f64 / totals.memory_total as f64 * 100.
     );
     let uptime = nice_time(totals.uptime);
-    let eval = use_eval(cx);
-    let live = use_state(cx, || true);
-    let visible = use_ref(cx, SortedProcesses::new);
-    let processes = use_state(cx, || man.read().procs().len());
+    let mut live = use_signal(|| true);
+    let mut visible = use_signal(SortedProcesses::new);
+    let processes = use_signal(|| man.read().procs().len());
 
-    update_sunburst(man, eval, max_depth);
+    update_sunburst(man, max_depth);
+    let live2 = live.clone();
+    let mut visible2 = visible.clone();
+    let mut my_svg = my_svg.clone();
+    let mut man = man.clone();
 
-    use_coroutine(cx, |_: UnboundedReceiver<()>| {
-        let my_svg = my_svg.clone();
-        let man = man.clone();
-        let live = live.clone();
-        let visible = visible.clone();
-
-        async move {
-            loop {
-                if *live.current() {
-                    man.with_mut(|s| s.update());
-                    my_svg.set(svgmaker::generate_svg(man.read().procs()));
-                    visible.write().update(man.read().procs());
-                }
-                tokio::time::sleep(Duration::from_millis(2000)).await;
+    use_coroutine(move |_: UnboundedReceiver<()>| async move {
+        loop {
+            if *live2.read() {
+                man.with_mut(|s| s.update());
+                my_svg.set(svgmaker::generate_svg(man.read().procs()));
+                visible2.write().update(man.read().procs());
             }
+            tokio::time::sleep(Duration::from_millis(2000)).await;
         }
     });
 
-    cx.render(rsx!(
+    rsx! {
         table {
             tr {
                 td { width: "100px", "Memory" }
@@ -105,13 +101,12 @@ fn app(cx: Scope) -> Element {
                 td { class: "tot", "{processes}" }
             }
         }
-
         div {
             "Filter"
             input {
                 style: "margin-left:20px",
                 oninput: move |a| {
-                    visible.write().set_filter(a.value.clone());
+                    visible.write().set_filter(a.value().clone());
                 }
             }
         }
@@ -121,7 +116,7 @@ fn app(cx: Scope) -> Element {
                     tr { class: "thead",
                         for (i , p) in ["Command", "Name", "PID", "Self", "Children", "Total", "CPU"].iter().enumerate() {
                             td {
-                                onclick: move |_| {
+                            onclick: move |_| {
                                     if visible.read().sort_col == i {
                                         visible.write().sort_cycle();
                                     } else {
@@ -132,9 +127,9 @@ fn app(cx: Scope) -> Element {
                                     }
                                     visible.write().update(man.read().procs());
                                 },
-                                style: if i == 0 { "width:700px" } else if i == 1 { "width:266px" } else { "width:90px" },
+                                style: if i == 0 { "width:700px" } else{"width:90px" },
                                 class: if i < 2 { "" } else { "tright" },
-                                sort_name(p,i,visible)
+                                "{sort_name(p,i,visible)}"
                             }
                         }
                     }
@@ -142,7 +137,6 @@ fn app(cx: Scope) -> Element {
                 tbody {
                     for pr in visible.read().procs().iter() {
                         tr {
-                            rsx!(
                             td{title:"{pr[0]}",class:"tcell ","{pr[0]}"}
                             td{title:"{pr[1]}",class:"tcell ","{pr[1]}"}
                             td{class:"tcell tright","{pr[2]}"}
@@ -150,13 +144,11 @@ fn app(cx: Scope) -> Element {
                             td{class:"tcell tright","{pr[4]}"}
                             td{class:"tcell tright","{pr[5]}"}
                             td{class:"tcell tright","{pr[6]}"}
-                        )
                         }
                     }
                 }
             }
         }
-
         h2 { "Memory analysis" }
         div {
             "Live update"
@@ -165,7 +157,7 @@ fn app(cx: Scope) -> Element {
                 r#type: "checkbox",
                 checked: "{live}",
                 oninput: move |_| {
-                    let old = *live.current();
+                    let old = *live.read();
                     live.set(!old);
                 }
             }
@@ -178,20 +170,20 @@ fn app(cx: Scope) -> Element {
                 r#type: "number",
                 value: "{max_depth}",
                 oninput: move |a| {
-                    let val = a.value.parse::<usize>().unwrap_or(100);
+                    let val = a.value().parse::<usize>().unwrap_or(100);
                     max_depth.set(val)
                 }
             }
         }
         div { id: "myDiv" }
         div { dangerous_inner_html: "{my_svg}" }
-    ))
+    }
 }
 
 fn update_sunburst(
-    man: &UseRef<ProcManager>,
-    eval: &std::rc::Rc<dyn Fn(&str) -> Result<UseEval, EvalError>>,
-    max: &UseState<usize>,
+    man: Signal<ProcManager>,
+    //eval: &std::rc::Rc<dyn Fn(&str) -> Result<UseEval, EvalError>>,
+    max: Signal<usize>,
 ) {
     let (l, p, v, t, m, c) = get_labels_parents_values(man.read().procs());
     let js = r##"
@@ -230,7 +222,7 @@ fn update_sunburst(
         .replace("TEXT", &t)
         .replace("META", &m)
         .replace("COLORS", &c)
-        .replace("MAXDEPTHVALUE", &max.get().to_string());
+        .replace("MAXDEPTHVALUE", &max.read().to_string());
     let _ = eval(&js);
 }
 
@@ -272,30 +264,23 @@ fn get_labels_parents_values(
                 r#""{} own:{} total:{}""#,
                 f.name,
                 nice_size_thousands(f.memory),
-                nice_size_thousands(f.total())
+                nice_size_thousands(f.total()),
             )
         })
         .collect::<Vec<String>>()
         .join(",");
 
-    let fifth_largest: u64 = get_top5(procs).last().unwrap().memory;
+    //let fifth_largest: u64 = get_top5(procs).last().unwrap().memory;
+    let top = get_top_memory(procs).memory;
 
     let colors = procs
         .iter()
         .map(|t| {
-            let is_top = t.memory >= fifth_largest;
-
-            let col = if is_top {
-                "rgb(255, 99, 104)".to_string()
-            } else {
-                //yellow if low g = 255, b = 200
-                //orange if heigh g= 190 b = 0
-                let ratio = t.memory as f32 / fifth_largest as f32;
-                let g = 255 - ((255 - 200) as f32 * ratio) as u32;
-                let b = 190 - ((190) as f32 * ratio) as u32;
-
-                format!("rgb(255, {g}, {b})")
-            };
+            //color from red to light yellow based on memory usage compared to top
+            let ratio = (t.memory as f32 / top as f32).powf(0.3);
+            let g = ((1.0 - ratio) * 255.0) as u32;
+            let b = ((1.0 - ratio) * 150.0) as u32;
+            let col = format!("rgb(255, {g}, {b})");
 
             format!(r#""{}""#, col)
         })
@@ -317,8 +302,11 @@ fn get_top5(procs: &[MyProcess]) -> Vec<MyProcess> {
     temp.sort_by(|a, b| b.memory.cmp(&a.memory));
     temp.iter().take(5).cloned().collect()
 }
+fn get_top_memory(procs: &[MyProcess]) -> &MyProcess {
+    procs.iter().max_by_key(|a| a.memory).unwrap()
+}
 
-fn sort_name(name: &str, col: usize, sorted: &UseRef<SortedProcesses>) -> String {
+fn sort_name(name: &str, col: usize, sorted: Signal<SortedProcesses>) -> String {
     let sym = if col == sorted.read().sort_col {
         match sorted.read().sort_type {
             SortType::Ascending => "↑",

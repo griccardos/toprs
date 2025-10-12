@@ -1,5 +1,6 @@
 use embed_resource::NONE;
 
 fn main() {
-    embed_resource::compile("resources.rc", NONE);
+    let re = embed_resource::compile("resources.rc", NONE);
+    re.manifest_optional().unwrap();
 }

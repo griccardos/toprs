@@ -6,15 +6,15 @@ static ROOT: &str = r##"<?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLI
 <svg version="1.1" width="99%" height="100%" viewBox="0 0 1000 300" xmlns="http://www.w3.org/2000/svg"  >
 <style type="text/css">
 text { font-family:monospace; font-size:14px }
-g.hoverable:hover { stroke:black; stroke-width:1; cursor:pointer; }
+g.hoverable:hover rect { stroke:#ff2288; stroke-width:2; cursor:pointer;  }
 </style>
-
+<text x="0" y="20" fill="white">Blue is total children memory, whereas own memory is gradient from red (highest) to yellow (lowest)</text>
   [SVG]
 </svg>
 "##;
 
 pub fn generate_svg(procs: &[MyProcess]) -> String {
-    let mut svg = r##"<svg id="data" x="10" y="10" width="1000">"##.to_string();
+    let mut svg = r##"<svg id="data" x="0" y="30" width="1000">"##.to_string();
 
     let height = 20.;
     let width = 1000.; //width as f32;
@@ -24,9 +24,6 @@ pub fn generate_svg(procs: &[MyProcess]) -> String {
     let total_stat: u64 = procs.iter().map(|s| s.memory).sum();
     for layer in layers {
         for item in layer {
-            if item.total_width <= 0. {
-                continue;
-            }
             let percent_total =
                 format!("{:.2}%", item.proc.memory as f32 / total_stat as f32 * 100.);
             let text = if item.total_width > 10. {
@@ -66,13 +63,13 @@ pub fn generate_svg(procs: &[MyProcess]) -> String {
                 //own rect
                 item.x + item.children_width,
                 item.y + 0.25,
-                item.own_width - 0.25,
+                (item.own_width - 0.25).max(0.),
                 height - 0.5,
                 item.col,
                 //whiteout rest
                 item.x + item.total_width,
                 item.y,
-                width - item.x - item.total_width,
+                (width - item.x - item.total_width).max(0.),
                 height,
                 "black"
             ));
@@ -107,8 +104,7 @@ fn draw_pid(
 ) {
     let mut vals: Vec<u64> = procs.iter().map(|s| s.memory).collect();
     vals.sort_by(|a, b| b.cmp(a));
-    let fifth_largest: u64 = vals.iter().skip(4).copied().next().unwrap_or_default();
-
+    let max_mem = procs.iter().max_by_key(|a| a.memory).unwrap().memory;
     let to;
     let t;
     if pid == 0 {
@@ -136,21 +132,20 @@ fn draw_pid(
 
     //add self
 
-    let is_top = t.memory >= fifth_largest;
-    let total_width = t.total() as f32 / current_depth_total as f32 * available_width;
-    let own_width = t.memory as f32 / current_depth_total as f32 * available_width;
+    let mut total_width = t.total() as f32 / current_depth_total as f32 * available_width;
+    let mut own_width = t.memory as f32 / current_depth_total as f32 * available_width;
+    if total_width.is_nan() || total_width < 0. {
+        total_width = 0.;
+    }
+    if own_width.is_nan() || own_width < 0. {
+        own_width = 0.;
+    }
 
-    let col = if is_top {
-        "rgb(255, 99, 104)".to_string()
-    } else {
-        //yellow if low g = 255, b = 200
-        //orange if heigh g= 190 b = 0
-        let ratio = t.memory as f32 / fifth_largest as f32;
-        let g = 255 - ((255 - 200) as f32 * ratio) as u32;
-        let b = 190 - ((190) as f32 * ratio) as u32;
+    let ratio = (t.memory as f32 / max_mem as f32).powf(0.3);
+    let g = ((1.0 - ratio) * 255.0) as u32;
+    let b = ((1.0 - ratio) * 150.0) as u32;
+    let col = format!("rgb(255, {g}, {b})");
 
-        format!("rgb(255, {g}, {b})")
-    };
     let y = depth as f32 * (height + 1.);
 
     if layers.len() <= depth {
@@ -184,7 +179,10 @@ fn draw_pid(
             depth + 1,
             layers,
         );
-        let child_width = child.total() as f32 / total as f32 * (total_width - own_width);
+        let mut child_width = child.total() as f32 / total as f32 * (total_width - own_width);
+        if child_width.is_nan() || child_width < 0. {
+            child_width = 0.;
+        }
         starting_width += child_width;
     }
 }
