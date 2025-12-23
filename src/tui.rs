@@ -110,7 +110,7 @@ fn draw_filter(f: &mut Frame, state: &State) {
     }
 }
 fn draw_help(f: &mut Frame) {
-    let help = r#"?/h        Help menu
+    let help = r#"?/F1        Help menu
 Up         Scroll up
 Down       Scroll down
 Left       Sort by column to left
@@ -138,8 +138,8 @@ command line arguments for modes:
                 .title("Help")
                 .border_type(BorderType::Rounded),
         );
-    let x = (f.area().width / 3).max(0);
-    let y = (f.area().height.saturating_sub(help.lines().count() as u16) / 3).max(0);
+    let x = f.area().width / 3;
+    let y = f.area().height.saturating_sub(help.lines().count() as u16) / 3;
     let w = 40.min(f.area().width.saturating_sub(x));
     let h = 20.min(f.area().height.saturating_sub(y));
     f.render_widget(p, Rect::new(x, y, w, h));
@@ -156,7 +156,7 @@ fn draw_top(f: &mut Frame, state: &State) {
             let width = f.area().width / 4;
             let x = (i % 4) as u16 * width;
             let y = (i / 4) as u16;
-            if y as u16 >= f.area().height {
+            if y >= f.area().height {
                 break;
             }
             draw_cpu(f, x, y, width, *cp / 100., &format!("{}", i + 1));
@@ -265,7 +265,7 @@ fn draw_table(f: &mut Frame, state: &State, tablestate: &mut TableState) {
         .map(|f| {
             Row::new(f.iter().enumerate().map(|(i, c)| {
                 let val = match i {
-                    2 | 3 | 4 | 5 | 6 => format!("{c:>10}"),
+                    2..=6 => format!("{c:>10}"),
                     _ => c.to_string(),
                 };
                 let pid = f[2].parse::<usize>().unwrap();
@@ -280,9 +280,7 @@ fn draw_table(f: &mut Frame, state: &State, tablestate: &mut TableState) {
                     style = Style::default().fg(Color::Magenta);
                 }
 
-                let cell = Cell::from(val).style(style);
-                //println!("{cell:?}");
-                cell
+                Cell::from(val).style(style)
             }))
             .height(1)
         })
@@ -317,74 +315,71 @@ fn get_cores_height(state: &State) -> u16 {
 }
 
 fn handle_input(done: &mut bool, state: &mut State) {
-    if event::poll(Duration::from_millis(100)).unwrap() {
-        if let Ok(Event::Key(key)) = event::read() {
-            if key.kind == KeyEventKind::Press {
-                if state.filtering {
-                    match key.code {
-                        KeyCode::Esc | KeyCode::Enter => state.filtering = false,
-                        KeyCode::Char(c) => state.filter.push(c),
-                        KeyCode::Backspace => {
-                            let _ = state.filter.pop();
-                        }
-                        _ => {}
-                    }
-                    state.visible.set_filter(state.filter.clone());
-                } else {
-                    match key.code {
-                        KeyCode::Char('q') | KeyCode::Esc => *done = true,
-                        KeyCode::Char('s') => {
-                            state.visible.sort_cycle();
-                            state.sort();
-                        }
-                        KeyCode::Char('c') => {
-                            if key.modifiers.contains(KeyModifiers::CONTROL) {
-                                *done = true
-                            } else {
-                                state.hide_cores = !state.hide_cores;
-                            }
-                        }
-                        KeyCode::Char('f') => {
-                            state.filtering = !state.filtering;
-                        }
-                        KeyCode::Char('z') => state.visible.hidezeros = !state.visible.hidezeros,
-                        KeyCode::Char('h') | KeyCode::Char('?') => state.help = !state.help,
-                        KeyCode::Char('g') => {
-                            *done = true;
-                            state.start_gui = true
-                        }
-                        KeyCode::Down => {
-                            state.selected =
-                                (state.selected + 1).min(state.visible.procs().len() - 1)
-                        }
-                        KeyCode::Up => state.selected = state.selected.saturating_sub(1),
-                        KeyCode::PageDown => {
-                            state.selected =
-                                (state.selected + 20).min(state.visible.procs().len() - 1)
-                        }
-                        KeyCode::PageUp => state.selected = state.selected.saturating_sub(20),
-                        KeyCode::Home => state.selected = 0,
-                        KeyCode::End => state.selected = state.visible.procs().len() - 1,
-
-                        KeyCode::Left => {
-                            state.visible.sort_col = state.visible.sort_col.saturating_sub(1);
-                            if state.visible.sort_col == 0 {
-                                state.visible.sort_type = SortType::None;
-                            }
-                            state.sort();
-                        }
-                        KeyCode::Right => {
-                            state.visible.sort_col = (state.visible.sort_col + 1).min(6);
-                            if state.visible.sort_col > 0
-                                && state.visible.sort_type == SortType::None
-                            {
-                                state.visible.sort_type = SortType::Descending;
-                            }
-                            state.sort();
-                        }
-                        _ => {}
+    if event::poll(Duration::from_millis(50)).unwrap()
+        && let Ok(Event::Key(key)) = event::read()
+        && key.kind == KeyEventKind::Press
+    {
+        if state.filtering {
+            match key.code {
+                KeyCode::Esc | KeyCode::Enter => state.filtering = false,
+                KeyCode::Char(c) => state.filter.push(c),
+                KeyCode::Backspace => {
+                    let _ = state.filter.pop();
+                }
+                _ => {}
+            }
+            state.visible.set_filter(state.filter.clone());
+        } else {
+            match key.code {
+                KeyCode::Char('q') | KeyCode::Esc => *done = true,
+                KeyCode::Char('s') => {
+                    state.visible.sort_cycle();
+                    state.sort();
+                }
+                KeyCode::Char('c') => {
+                    if key.modifiers.contains(KeyModifiers::CONTROL) {
+                        *done = true
+                    } else {
+                        state.hide_cores = !state.hide_cores;
                     }
                 }
+                KeyCode::Char('f') => {
+                    state.filtering = !state.filtering;
+                }
+                KeyCode::Char('z') => state.visible.hidezeros = !state.visible.hidezeros,
+                KeyCode::Char('?') | KeyCode::F(1) => state.help = !state.help,
+                KeyCode::Char('g') => {
+                    *done = true;
+                    state.start_gui = true
+                }
+                KeyCode::Down | KeyCode::Char('j') => {
+                    state.selected = (state.selected + 1).min(state.visible.procs().len() - 1)
+                }
+                KeyCode::Up | KeyCode::Char('k') => {
+                    state.selected = state.selected.saturating_sub(1)
+                }
+                KeyCode::PageDown => {
+                    state.selected = (state.selected + 20).min(state.visible.procs().len() - 1)
+                }
+                KeyCode::PageUp => state.selected = state.selected.saturating_sub(20),
+                KeyCode::Home => state.selected = 0,
+                KeyCode::End => state.selected = state.visible.procs().len() - 1,
+
+                KeyCode::Left | KeyCode::Char('h') => {
+                    state.visible.sort_col = state.visible.sort_col.saturating_sub(1);
+                    if state.visible.sort_col == 0 {
+                        state.visible.sort_type = SortType::None;
+                    }
+                    state.sort();
+                }
+                KeyCode::Right | KeyCode::Char('l') => {
+                    state.visible.sort_col = (state.visible.sort_col + 1).min(6);
+                    if state.visible.sort_col > 0 && state.visible.sort_type == SortType::None {
+                        state.visible.sort_type = SortType::Descending;
+                    }
+                    state.sort();
+                }
+                _ => {}
             }
         }
     }

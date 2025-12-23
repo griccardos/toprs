@@ -98,12 +98,11 @@ fn get_config() -> Config {
 
     //if find file, use it
     for path in paths {
-        if path.exists() {
-            if let Ok(str) = std::fs::read_to_string(path) {
-                if let Ok(config) = toml::from_str(&str) {
-                    return config;
-                }
-            }
+        if path.exists()
+            && let Ok(str) = std::fs::read_to_string(path)
+            && let Ok(config) = toml::from_str(&str)
+        {
+            return config;
         }
     }
 

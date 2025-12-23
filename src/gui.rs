@@ -41,8 +41,8 @@ pub fn run() {
 }
 
 fn app() -> Element {
-    let man = use_signal(ProcManager::new);
-    let my_svg = use_signal(|| "".to_string());
+    let mut man = use_signal(ProcManager::new);
+    let mut my_svg = use_signal(|| "".to_string());
     let top5 = get_top5(man.read().procs());
     let mut max_depth = use_signal(|| top5.iter().map(|x| x.depth).max().unwrap_or(5));
     let totals = man.read().get_totals();
@@ -60,17 +60,13 @@ fn app() -> Element {
     let processes = use_signal(|| man.read().procs().len());
 
     update_sunburst(man, max_depth);
-    let live2 = live.clone();
-    let mut visible2 = visible.clone();
-    let mut my_svg = my_svg.clone();
-    let mut man = man.clone();
 
     use_coroutine(move |_: UnboundedReceiver<()>| async move {
         loop {
-            if *live2.read() {
+            if *live.read() {
                 man.with_mut(|s| s.update());
                 my_svg.set(svgmaker::generate_svg(man.read().procs()));
-                visible2.write().update(man.read().procs());
+                visible.write().update(man.read().procs());
             }
             tokio::time::sleep(Duration::from_millis(2000)).await;
         }

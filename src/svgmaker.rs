@@ -71,7 +71,7 @@ pub fn generate_svg(procs: &[MyProcess]) -> String {
                 item.y,
                 (width - item.x - item.total_width).max(0.),
                 height,
-                "black"
+                "transparent"
             ));
         }
     }
@@ -92,6 +92,7 @@ struct LayerProc {
     proc: MyProcess,
 }
 
+#[allow(clippy::too_many_arguments)]
 fn draw_pid(
     pid: usize,
     procs: &[MyProcess],
