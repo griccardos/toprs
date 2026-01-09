@@ -13,9 +13,10 @@ struct State {
     show_info: Option<usize>,
     show_kill: bool,
     show_help: bool,
+    config: Config,
 }
 
-pub fn run() -> Result<bool, std::io::Error> {
+pub fn run(config: Config) -> Result<bool, std::io::Error> {
     enable_raw_mode()?;
     let mut stdout = std::io::stdout();
     let mut man = manager::ProcManager::new();
@@ -34,7 +35,11 @@ pub fn run() -> Result<bool, std::io::Error> {
         show_info: None,
         show_kill: false,
         show_help: false,
+        config: config,
     };
+    state.visible.sort_col = state.config.tui.sort_column;
+    state.visible.sort_type = state.config.tui.sort_type;
+    state.hide_cores = !state.config.tui.show_cpu_per_core;
     state.sort();
     execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
 
@@ -91,6 +96,12 @@ pub fn run() -> Result<bool, std::io::Error> {
             tablestate_kill.select(Some(state.selected_kill));
         })?;
     }
+
+    //save config
+    state.config.tui.sort_column = state.visible.sort_col;
+    state.config.tui.sort_type = state.visible.sort_type;
+    state.config.tui.show_cpu_per_core = !state.hide_cores;
+    state.config.save();
 
     // restore terminal
     disable_raw_mode()?;
@@ -589,6 +600,7 @@ use ratatui::{
 };
 
 use crate::{
+    config::Config,
     helpers::{nice_size, nice_size_g, nice_time},
     manager::{self, Totals},
     myprocess::MyProcess,

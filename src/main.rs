@@ -1,3 +1,4 @@
+mod config;
 #[cfg(feature = "gui")]
 mod gui;
 mod helpers;
@@ -11,11 +12,11 @@ use std::{
     fs::File,
     io::{BufWriter, Write},
     path::PathBuf,
-    str::FromStr,
 };
 
 use gumdrop::Options;
-use serde::Deserialize;
+
+use crate::config::{Config, Mode};
 
 #[derive(Options)]
 struct Args {
@@ -35,34 +36,24 @@ struct Args {
     help: bool,
 }
 
-#[derive(Deserialize)]
-enum Mode {
-    Gui,
-    Tui,
-}
-
-#[derive(Deserialize)]
-struct Config {
-    mode: Mode,
-}
-
 fn main() {
     let ops = Args::parse_args_default_or_exit();
-    let config = get_config();
+    let config = Config::load();
+    let default_mode = config.mode;
 
     if let Some(path) = ops.svg {
         draw_flamegraph(path);
     } else if ops.gui {
         run_gui();
     } else if ops.tui {
-        run_tui();
+        run_tui(config);
     } else if ops.out {
         run_output();
     } else {
         //no arguments so we try load config or default
-        match config.mode {
+        match default_mode {
             Mode::Gui => run_gui(),
-            Mode::Tui => run_tui(),
+            Mode::Tui => run_tui(config),
         }
     }
 }
@@ -77,41 +68,14 @@ fn run_gui() {
 }
 
 ///run tui, might also request to go to gui within tui
-fn run_tui() {
-    match tui::run() {
+fn run_tui(config: Config) {
+    match tui::run(config) {
         Ok(true) => gui::run(),
         Ok(false) => {}
         Err(err) => {
             println!("error: {}", err);
         }
     }
-}
-
-fn get_config() -> Config {
-    //load paths: first home, else /etc
-    let mut paths = vec![];
-    //home directory
-    if let Some(mut dir) = dirs::home_dir() {
-        dir.push(".config");
-        dir.push("toprs");
-        dir.push("config.toml");
-        paths.push(dir);
-    }
-    //fallback
-    paths.push(PathBuf::from_str("/etc/toprs/config.toml").unwrap());
-
-    //if find file, use it
-    for path in paths {
-        if path.exists()
-            && let Ok(str) = std::fs::read_to_string(path)
-            && let Ok(config) = toml::from_str(&str)
-        {
-            return config;
-        }
-    }
-
-    //default
-    Config { mode: Mode::Tui }
 }
 
 fn run_output() {

@@ -1,8 +1,10 @@
 use std::{cmp::Reverse, collections::HashSet};
 
+use serde::{Deserialize, Serialize};
+
 use crate::{helpers::nice_size, myprocess::MyProcess};
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Serialize, Deserialize, Clone, Copy)]
 pub enum SortType {
     Ascending,
     Descending,
