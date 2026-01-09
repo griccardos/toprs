@@ -1,44 +1,18 @@
-use std::time::{Duration, Instant};
-
-use crossterm::{
-    event::{
-        self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind, KeyModifiers,
-    },
-    execute,
-    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
-};
-use ratatui::{
-    Frame, Terminal,
-    backend::CrosstermBackend,
-    layout::{Constraint, Rect},
-    style::{Color, Style},
-    text::Line,
-    widgets::{
-        Block, BorderType, Borders, Cell, Clear, LineGauge, Paragraph, Row, Table, TableState,
-        Widget,
-    },
-};
-
-use crate::{
-    helpers::{nice_size, nice_size_g, nice_time},
-    manager::{self, Totals},
-    myprocess::MyProcess,
-    sorted::{SortType, SortedProcesses},
-};
-
 struct State {
     visible: SortedProcesses,
     procs: Vec<MyProcess>,
     totals: Totals,
     selected: usize,
+    selected_kill: usize,
     top5memory: Vec<usize>,
     top5cpu: Vec<usize>,
-    help: bool,
     start_gui: bool,
     filter: String,
     filtering: bool,
     hide_cores: bool,
     show_info: Option<usize>,
+    show_kill: bool,
+    show_help: bool,
 }
 
 pub fn run() -> Result<bool, std::io::Error> {
@@ -49,15 +23,17 @@ pub fn run() -> Result<bool, std::io::Error> {
         procs: man.procs().clone(),
         visible: SortedProcesses::new(),
         selected: 0,
+        selected_kill: 0,
         totals: man.get_totals(),
         top5memory: vec![],
         top5cpu: vec![],
-        help: false,
         start_gui: false,
         filter: String::new(),
         filtering: false,
         hide_cores: false,
         show_info: None,
+        show_kill: false,
+        show_help: false,
     };
     state.sort();
     execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
@@ -67,6 +43,7 @@ pub fn run() -> Result<bool, std::io::Error> {
     let mut done = false;
     let mut last = Instant::now();
     let mut tablestate = TableState::default();
+    let mut tablestate_kill = TableState::default();
 
     while !done {
         terminal.draw(|f| {
@@ -82,7 +59,7 @@ pub fn run() -> Result<bool, std::io::Error> {
             draw_top(f, &state);
             draw_table(f, &state, &mut tablestate);
 
-            if state.help {
+            if state.show_help {
                 draw_help(f);
             }
             if let Some(pid) = state.show_info
@@ -96,14 +73,22 @@ pub fn run() -> Result<bool, std::io::Error> {
                 };
                 draw_process_info(f, proc, parent);
             }
+            if state.show_kill {
+                draw_kill(f, &mut tablestate_kill);
+            }
+
             draw_filter(f, &state);
 
             handle_input(&mut done, &mut state);
+
+            //update selected for table
             state.selected = state
                 .selected
                 .min(state.visible.procs().len().saturating_sub(1));
-
             tablestate.select(Some(state.selected));
+
+            state.selected_kill = state.selected_kill.min(20);
+            tablestate_kill.select(Some(state.selected_kill));
         })?;
     }
 
@@ -118,14 +103,62 @@ pub fn run() -> Result<bool, std::io::Error> {
     Ok(state.start_gui)
 }
 
+fn draw_kill(f: &mut Frame<'_>, tablestate: &mut TableState) {
+    let rows = vec![
+        "0: Cancel",
+        "1: SIGHUP - Hangup",
+        "2: SIGINT - Interrupt",
+        "3: SIGQUIT - Quit",
+        "4: SIGILL - Illegal Instruction",
+        "5: SIGTRAP - Trace/Breakpoint Trap",
+        "6: SIGABRT - Abort",
+        "7: SIGBUS - Bus Error",
+        "8: SIGFPE - Floating Point Exception",
+        "9: SIGKILL - Kill",
+        "10: SIGUSR1 - User Defined Signal 1",
+        "11: SIGSEGV - Segmentation Fault",
+        "12: SIGUSR2 - User Defined Signal 2",
+        "13: SIGPIPE - Broken Pipe",
+        "14: SIGALRM - Alarm Clock",
+        "15: SIGTERM - Terminate",
+        "16: SIGSTKFLT - Stack Fault",
+        "17: SIGCHLD - Child Status Has Changed",
+        "18: SIGCONT - Continue",
+        "19: SIGSTOP - Stop",
+        "20: SIGTSTP - Terminal Stop",
+    ];
+    let max_wid = rows.iter().map(|a| a.len()).max().unwrap_or(10) as u16;
+    let widths = [Constraint::Length(max_wid)];
+
+    let t = Table::new(
+        rows.iter().map(|a| Row::new(vec![*a])).collect::<Vec<_>>(),
+        widths,
+    )
+    .row_highlight_style(Style::default().bg(Color::LightYellow).fg(Color::Black))
+    .block(
+        Block::default()
+            .borders(Borders::ALL)
+            .padding(Padding::horizontal(2))
+            .border_style(Style::default().fg(Color::Red))
+            .title("Kill")
+            .border_type(BorderType::Rounded),
+    );
+
+    let rect = f
+        .area()
+        .centered(Constraint::Length(max_wid + 6), Constraint::Length(23));
+    Clear::default().render(rect, f.buffer_mut());
+    f.render_stateful_widget(t, rect, tablestate);
+}
+
 fn draw_process_info(f: &mut Frame<'_>, proc: &MyProcess, parent: String) {
     let mut lines = vec![
         format!("PID: {}", proc.pid),
         format!("Name: {}", proc.name),
         format!("Command Line: {}", proc.command),
-        format!("Memory (self): {}", nice_size(proc.memory)),
-        format!("Memory (children): {}", nice_size(proc.children_memory)),
-        format!("Memory (total): {}", nice_size(proc.total())),
+        format!("Memory (self):     {:>10}", nice_size(proc.memory)),
+        format!("Memory (children): {:>10}", nice_size(proc.children_memory)),
+        format!("Memory (total):    {:>10}", nice_size(proc.total())),
         format!("CPU: {:>5.1}%", proc.cpu),
         format!("Run Time: {}", nice_time(proc.run_time)),
     ];
@@ -242,7 +275,7 @@ fn draw_top(f: &mut Frame, state: &State) {
     f.render_widget(threads, Rect::new(0, cpu_height + 3, f.area().width, 1));
 
     let commands = Block::default()
-        .title("?: help  s: Sort Type  c: cpu  enter: info  f: filter ".to_string());
+        .title("?: help  s: Sort Type  c: CPU  enter: info  f: filter ".to_string());
     f.render_widget(commands, Rect::new(0, cpu_height + 4, f.area().width, 1));
 }
 
@@ -399,14 +432,48 @@ fn handle_input(done: &mut bool, state: &mut State) {
                 _ => {}
             }
             state.visible.set_filter(state.filter.clone());
-        } else if state.help {
+        } else if state.show_help {
             match key.code {
-                KeyCode::Esc | KeyCode::Char('?') | KeyCode::F(1) => state.help = false,
+                KeyCode::Esc | KeyCode::Char('?') | KeyCode::F(1) => state.show_help = false,
                 _ => {}
             }
         } else if state.show_info.is_some() {
             match key.code {
                 KeyCode::Esc | KeyCode::Enter => state.show_info = None,
+                _ => {}
+            }
+        } else if state.show_kill {
+            match key.code {
+                KeyCode::Down | KeyCode::Char('j') => {
+                    state.selected_kill = (state.selected_kill + 1).min(20)
+                }
+
+                KeyCode::Up | KeyCode::Char('k') => {
+                    state.selected_kill = state.selected_kill.saturating_sub(1)
+                }
+                KeyCode::Esc => state.show_kill = false,
+                KeyCode::Enter => {
+                    if state.selected_kill == 0 {
+                        //cancel
+                        state.show_kill = false;
+                    } else {
+                        //send signal
+                        let signal = state.selected_kill as i32;
+                        if let Some(pid) = state
+                            .visible
+                            .procs()
+                            .get(state.selected)
+                            .and_then(|p| p.get(2))
+                            .and_then(|s| s.parse::<usize>().ok())
+                        {
+                            let _ = Command::new("kill")
+                                .arg(format!("-{signal}"))
+                                .arg(format!("{pid}"))
+                                .output();
+                        }
+                        state.show_kill = false;
+                    }
+                }
                 _ => {}
             }
         } else {
@@ -427,14 +494,18 @@ fn handle_input(done: &mut bool, state: &mut State) {
                     state.filtering = !state.filtering;
                 }
                 KeyCode::Char('z') => state.visible.hidezeros = !state.visible.hidezeros,
-                KeyCode::Char('?') | KeyCode::F(1) => state.help = !state.help,
+                KeyCode::Char('?') | KeyCode::F(1) => state.show_help = !state.show_help,
                 KeyCode::Char('g') => {
                     *done = true;
                     state.start_gui = true
                 }
+                KeyCode::Char('k') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                    state.show_kill = !state.show_kill
+                }
                 KeyCode::Down | KeyCode::Char('j') => {
                     state.selected = (state.selected + 1).min(state.visible.procs().len() - 1)
                 }
+
                 KeyCode::Up | KeyCode::Char('k') => {
                     state.selected = state.selected.saturating_sub(1)
                 }
@@ -492,3 +563,34 @@ impl State {
         self.top5cpu = temp.iter().map(|f| f.pid).take(5).collect();
     }
 }
+
+use std::{
+    process::Command,
+    time::{Duration, Instant},
+};
+
+use crossterm::{
+    event::{
+        self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind, KeyModifiers,
+    },
+    execute,
+    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
+};
+use ratatui::{
+    Frame, Terminal,
+    backend::CrosstermBackend,
+    layout::{Constraint, Rect},
+    style::{Color, Style},
+    text::Line,
+    widgets::{
+        Block, BorderType, Borders, Cell, Clear, LineGauge, Padding, Paragraph, Row, Table,
+        TableState, Widget,
+    },
+};
+
+use crate::{
+    helpers::{nice_size, nice_size_g, nice_time},
+    manager::{self, Totals},
+    myprocess::MyProcess,
+    sorted::{SortType, SortedProcesses},
+};
