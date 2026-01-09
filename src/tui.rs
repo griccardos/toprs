@@ -265,15 +265,17 @@ fn draw_top(f: &mut Frame, state: &State) {
             if y >= f.area().height {
                 break;
             }
-            draw_cpu(f, x, y, width, *cp / 100., &format!("{}", i + 1));
+            draw_cpu(f, x, y, width, *cp / 100., None, &format!("{}", i + 1));
         }
     }
+    let max_cpu = totals.cpus.iter().cloned().fold(0. / 0., f32::max) / 100.;
     draw_cpu(
         f,
         0,
         cpu_height,
         48,
         totals.cpu_avg / 100.,
+        Some(max_cpu),
         &format!("Cpu x{}:", totals.cpu_count),
     );
 
@@ -306,29 +308,47 @@ fn draw_mem(totals: &Totals, f: &mut Frame, y: u16) {
 }
 
 fn gauge(f: &mut Frame, x: u16, y: u16, width: u16, val: f32, title: &str) {
-    let col = if val > 70. {
-        Color::LightRed
-    } else if val > 35. {
-        Color::Yellow
-    } else {
-        Color::White
-    };
+    //go from yellow to red depending on value by exponential gradient
+    let red = 255;
+    let green = (255. * (1. - val.min(1.).max(0.).powf(2.0))) as u8;
+
+    let col = Color::Rgb(red, green, 0);
+
     let gr = LineGauge::default()
         .label(title)
-        .filled_style(Style::default().fg(col).bg(Color::Black))
-        .ratio((val as f64) / 100.);
+        .filled_symbol("▰")
+        .unfilled_symbol("▱")
+        .filled_style(Style::new().fg(col))
+        .unfilled_style(Style::new().fg(Color::DarkGray))
+        .ratio(val as f64);
 
     f.render_widget(gr, Rect::new(x, y, width, 1));
 }
 
-fn draw_cpu(f: &mut Frame, x: u16, y: u16, width: u16, cpu: f32, title: &str) {
+fn draw_cpu(
+    f: &mut Frame,
+    x: u16,
+    y: u16,
+    width: u16,
+    cpu: f32,
+    max_cpu: Option<f32>,
+    title: &str,
+) {
     gauge(
         f,
         x,
         y,
         width,
         cpu,
-        &format!("{title:>6} {:>5.1}%", cpu * 100.),
+        &format!(
+            "{title:>6} {:>5.1}%{}",
+            cpu * 100.,
+            if let Some(max_cpu) = max_cpu {
+                format!(" (max {:.1}%)", max_cpu * 100.)
+            } else {
+                "".to_string()
+            }
+        ),
     );
 }
 

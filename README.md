@@ -12,7 +12,6 @@ Run `toprs` for console or `toprs -g` for gui
 If you want to always run as Gui mode, add the following to your config file located
 - `~/.config/toprs/config.toml` 
 - `c:\Users\Name\.config\toprs\config.toml` 
-- `/etc/toprs/config.toml` 
 
 ```toml
 mode="Gui"
@@ -30,7 +29,7 @@ SVG
 ![Gui](Screenshot3.PNG)
 
 Tui mode
-![Gui](Screenshot4.PNG)
+![Tui](Screenshot4.PNG)
 
 ### Operating modes 
 Run toprs with the following flags
