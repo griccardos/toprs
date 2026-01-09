@@ -8,6 +8,7 @@ pub struct MyProcess {
     pub cpu: f32,
     pub children_memory: u64,
     pub depth: usize,
+    pub run_time: u64,
 }
 
 impl MyProcess {

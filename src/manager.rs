@@ -113,6 +113,7 @@ fn update_procs(sys: &mut System) -> Vec<MyProcess> {
                 memory: x.memory(),
                 cpu: x.cpu_usage(),
                 children_memory: 0,
+                run_time: x.run_time(),
                 depth: 0,
             }
         })

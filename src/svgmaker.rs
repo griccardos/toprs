@@ -120,6 +120,7 @@ fn draw_pid(
             name: "all".to_string(),
             memory: 0,
             cpu: 0.,
+            run_time: 0,
             children_memory: tot,
             command: "".to_string(),
             depth: 0,

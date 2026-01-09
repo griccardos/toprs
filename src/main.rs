@@ -78,8 +78,12 @@ fn run_gui() {
 
 ///run tui, might also request to go to gui within tui
 fn run_tui() {
-    if let Err(err) = tui::run() {
-        println!("error: {}", err);
+    match tui::run() {
+        Ok(true) => gui::run(),
+        Ok(false) => {}
+        Err(err) => {
+            println!("error: {}", err);
+        }
     }
 }
 

@@ -12,11 +12,15 @@ use ratatui::{
     backend::CrosstermBackend,
     layout::{Constraint, Rect},
     style::{Color, Style},
-    widgets::{Block, BorderType, Borders, Cell, LineGauge, Paragraph, Row, Table, TableState},
+    text::Line,
+    widgets::{
+        Block, BorderType, Borders, Cell, Clear, LineGauge, Paragraph, Row, Table, TableState,
+        Widget,
+    },
 };
 
 use crate::{
-    helpers::{nice_size_g, nice_time},
+    helpers::{nice_size, nice_size_g, nice_time},
     manager::{self, Totals},
     myprocess::MyProcess,
     sorted::{SortType, SortedProcesses},
@@ -34,6 +38,7 @@ struct State {
     filter: String,
     filtering: bool,
     hide_cores: bool,
+    show_info: Option<usize>,
 }
 
 pub fn run() -> Result<bool, std::io::Error> {
@@ -52,6 +57,7 @@ pub fn run() -> Result<bool, std::io::Error> {
         filter: String::new(),
         filtering: false,
         hide_cores: false,
+        show_info: None,
     };
     state.sort();
     execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
@@ -79,9 +85,23 @@ pub fn run() -> Result<bool, std::io::Error> {
             if state.help {
                 draw_help(f);
             }
+            if let Some(pid) = state.show_info
+                && let Some(proc) = state.procs.iter().find(|p| p.pid == pid)
+            {
+                let parent = if let Some(pproc) = state.procs.iter().find(|p| p.pid == proc.parent)
+                {
+                    pproc.name.clone()
+                } else {
+                    "".to_string()
+                };
+                draw_process_info(f, proc, parent);
+            }
             draw_filter(f, &state);
 
             handle_input(&mut done, &mut state);
+            state.selected = state
+                .selected
+                .min(state.visible.procs().len().saturating_sub(1));
 
             tablestate.select(Some(state.selected));
         })?;
@@ -98,6 +118,46 @@ pub fn run() -> Result<bool, std::io::Error> {
     Ok(state.start_gui)
 }
 
+fn draw_process_info(f: &mut Frame<'_>, proc: &MyProcess, parent: String) {
+    let mut lines = vec![
+        format!("PID: {}", proc.pid),
+        format!("Name: {}", proc.name),
+        format!("Command Line: {}", proc.command),
+        format!("Memory (self): {}", nice_size(proc.memory)),
+        format!("Memory (children): {}", nice_size(proc.children_memory)),
+        format!("Memory (total): {}", nice_size(proc.total())),
+        format!("CPU: {:>5.1}%", proc.cpu),
+        format!("Run Time: {}", nice_time(proc.run_time)),
+    ];
+    if !parent.is_empty() {
+        lines.push(format!("Parent PID: {:?}", proc.parent));
+        lines.push(format!("Parent Name: {}", parent));
+    }
+
+    let cmd_width = lines[2].len() as u16 + 2;
+    let p = Paragraph::new(
+        lines
+            .iter()
+            .map(|a| Line::from(a.clone()))
+            .collect::<Vec<Line>>(),
+    )
+    .style(Style::default().bg(Color::Yellow).fg(Color::Black))
+    .block(
+        Block::default()
+            .borders(Borders::ALL)
+            .title(proc.name.clone())
+            .border_type(BorderType::Rounded),
+    );
+    let w = 40.max(cmd_width).min(f.area().width - 4);
+    let h = lines.len() as u16 + 2;
+    let rect = f
+        .area()
+        .centered(Constraint::Length(w), Constraint::Length(h));
+
+    Clear::default().render(rect, f.buffer_mut());
+    f.render_widget(p, rect);
+}
+
 fn draw_filter(f: &mut Frame, state: &State) {
     if state.filtering || !state.filter.is_empty() {
         let mut style = Style::default();
@@ -106,7 +166,7 @@ fn draw_filter(f: &mut Frame, state: &State) {
         }
         let top_height = get_cores_height(state) + 4;
         let p = Paragraph::new(format!("Filter: {}", state.filter)).style(style);
-        f.render_widget(p, Rect::new(0, top_height, 40, 1));
+        f.render_widget(p, Rect::new(f.area().width - 40, top_height, 40, 1));
     }
 }
 fn draw_help(f: &mut Frame) {
@@ -142,7 +202,9 @@ command line arguments for modes:
     let y = f.area().height.saturating_sub(help.lines().count() as u16) / 3;
     let w = 40.min(f.area().width.saturating_sub(x));
     let h = 20.min(f.area().height.saturating_sub(y));
-    f.render_widget(p, Rect::new(x, y, w, h));
+    let rect = Rect::new(x, y, w, h);
+    Clear::default().render(rect, f.buffer_mut());
+    f.render_widget(p, rect);
 }
 
 fn draw_top(f: &mut Frame, state: &State) {
@@ -178,6 +240,10 @@ fn draw_top(f: &mut Frame, state: &State) {
 
     let threads = Block::default().title(format!("Processes: {}", state.procs.len()));
     f.render_widget(threads, Rect::new(0, cpu_height + 3, f.area().width, 1));
+
+    let commands = Block::default()
+        .title("?: help  s: Sort Type  c: cpu  enter: info  f: filter ".to_string());
+    f.render_widget(commands, Rect::new(0, cpu_height + 4, f.area().width, 1));
 }
 
 fn draw_mem(totals: &Totals, f: &mut Frame, y: u16) {
@@ -321,7 +387,11 @@ fn handle_input(done: &mut bool, state: &mut State) {
     {
         if state.filtering {
             match key.code {
-                KeyCode::Esc | KeyCode::Enter => state.filtering = false,
+                KeyCode::Esc => {
+                    state.filtering = false;
+                    state.filter.clear();
+                }
+                KeyCode::Enter => state.filtering = false,
                 KeyCode::Char(c) => state.filter.push(c),
                 KeyCode::Backspace => {
                     let _ = state.filter.pop();
@@ -329,6 +399,16 @@ fn handle_input(done: &mut bool, state: &mut State) {
                 _ => {}
             }
             state.visible.set_filter(state.filter.clone());
+        } else if state.help {
+            match key.code {
+                KeyCode::Esc | KeyCode::Char('?') | KeyCode::F(1) => state.help = false,
+                _ => {}
+            }
+        } else if state.show_info.is_some() {
+            match key.code {
+                KeyCode::Esc | KeyCode::Enter => state.show_info = None,
+                _ => {}
+            }
         } else {
             match key.code {
                 KeyCode::Char('q') | KeyCode::Esc => *done = true,
@@ -364,7 +444,20 @@ fn handle_input(done: &mut bool, state: &mut State) {
                 KeyCode::PageUp => state.selected = state.selected.saturating_sub(20),
                 KeyCode::Home => state.selected = 0,
                 KeyCode::End => state.selected = state.visible.procs().len() - 1,
-
+                KeyCode::Enter => {
+                    if state.show_info.is_some() {
+                        state.show_info = None;
+                        return;
+                    }
+                    if !state.visible.procs().is_empty()
+                        && state.selected < state.visible.procs().len()
+                    {
+                        let pid = state.visible.procs()[state.selected][2]
+                            .parse::<usize>()
+                            .unwrap();
+                        state.show_info = Some(pid);
+                    }
+                }
                 KeyCode::Left | KeyCode::Char('h') => {
                     state.visible.sort_col = state.visible.sort_col.saturating_sub(1);
                     if state.visible.sort_col == 0 {

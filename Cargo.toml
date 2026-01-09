@@ -21,7 +21,7 @@ formato = "0.3.0"                                       #format numbers
 gumdrop = "0.8.1"                                       #arguments
 sysinfo = "0.37"                                        #get system info
 tokio = { version = "1", features = ["time"] }          #sleep
-ratatui = "0"                                           #console tui
+ratatui = "0.30"                                        #console tui
 dirs = "6"                                              #for load config from home
 toml = "0.9"                                            #for config
 serde = { version = "1.0", features = ["derive"] }      #for config
