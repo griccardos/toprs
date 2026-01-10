@@ -37,7 +37,7 @@ pub fn run(config: Config) -> Result<bool, std::io::Error> {
         show_info: None,
         show_kill: false,
         show_help: false,
-        config: config,
+        config,
     };
     state.visible.sort_col = state.config.tui.sort_column;
     state.visible.sort_type = state.config.tui.sort_type;
@@ -160,7 +160,8 @@ fn draw_kill(f: &mut Frame<'_>, tablestate: &mut TableState) {
     let rect = f
         .area()
         .centered(Constraint::Length(max_wid + 6), Constraint::Length(23));
-    Clear::default().render(rect, f.buffer_mut());
+
+    f.render_widget(Clear, rect);
     f.render_stateful_widget(t, rect, tablestate);
 }
 
@@ -200,7 +201,7 @@ fn draw_process_info(f: &mut Frame<'_>, proc: &MyProcess, parent: String) {
         .area()
         .centered(Constraint::Length(w), Constraint::Length(h));
 
-    Clear::default().render(rect, f.buffer_mut());
+    f.render_widget(Clear, rect);
     f.render_widget(p, rect);
 }
 
@@ -251,7 +252,7 @@ command line arguments for modes:
     let w = 40.min(f.area().width.saturating_sub(x));
     let h = 20.min(f.area().height.saturating_sub(y));
     let rect = Rect::new(x, y, w, h);
-    Clear::default().render(rect, f.buffer_mut());
+    f.render_widget(Clear, rect);
     f.render_widget(p, rect);
 }
 
@@ -272,7 +273,7 @@ fn draw_top(f: &mut Frame, state: &State) {
             draw_cpu(f, x, y, width, *cp / 100., None, &format!("{}", i + 1));
         }
     }
-    let max_cpu = totals.cpus.iter().cloned().fold(0. / 0., f32::max) / 100.;
+    let max_cpu = totals.cpus.iter().cloned().fold(0., f32::max) / 100.;
     draw_cpu(
         f,
         0,
@@ -347,10 +348,9 @@ where
 
 fn get_gradient(val: f32) -> Color {
     let red = 255;
-    let green = (255. * (1. - val.min(1.).max(0.).powf(2.0))) as u8;
+    let green = (255. * (1. - val.clamp(0., 1.).powf(2.0))) as u8;
 
-    let col = Color::Rgb(red, green, 0);
-    col
+    Color::Rgb(red, green, 0)
 }
 
 fn draw_cpu(
@@ -371,7 +371,7 @@ fn draw_cpu(
             format!("{:>5.1}%", cpu * 100.),
             Style::default().fg(col),
         ));
-        details.push(Span::raw(format!(" (max ")));
+        details.push(Span::raw(" (max ".to_string()));
         let col = get_gradient(max_cpu);
         details.push(Span::styled(
             format!("{:.1}%", max_cpu * 100.),
@@ -655,7 +655,7 @@ use ratatui::{
     text::{Line, Span},
     widgets::{
         Block, BorderType, Borders, Cell, Clear, LineGauge, Padding, Paragraph, Row, Table,
-        TableState, Widget,
+        TableState,
     },
 };
 

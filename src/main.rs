@@ -70,7 +70,11 @@ fn run_gui() {
 ///run tui, might also request to go to gui within tui
 fn run_tui(config: Config) {
     match tui::run(config) {
-        Ok(true) => gui::run(),
+        Ok(true) =>
+        {
+            #[cfg(feature = "gui")]
+            gui::run()
+        }
         Ok(false) => {}
         Err(err) => {
             println!("error: {}", err);

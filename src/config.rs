@@ -27,12 +27,11 @@ pub struct Config {
 impl Config {
     pub fn load() -> Config {
         let path = get_home_config();
-        if path.exists() {
-            if let Ok(contents) = std::fs::read_to_string(path) {
-                if let Ok(config) = toml::from_str::<Config>(&contents) {
-                    return config;
-                }
-            }
+        if path.exists()
+            && let Ok(contents) = std::fs::read_to_string(path)
+            && let Ok(config) = toml::from_str::<Config>(&contents)
+        {
+            return config;
         }
 
         //default
