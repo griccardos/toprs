@@ -46,6 +46,9 @@ impl SortedProcesses {
                     true
                 } else {
                     x.name.to_lowercase().contains(&self.filter.to_lowercase())
+                        || x.command
+                            .to_lowercase()
+                            .contains(&self.filter.to_lowercase())
                 }
             })
             .map(|f| {

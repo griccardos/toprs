@@ -301,7 +301,7 @@ fn draw_top(f: &mut Frame, state: &State) {
     f.render_widget(threads, Rect::new(0, cpu_height + 3, f.area().width, 1));
 
     let commands = Block::default()
-        .title("?: help  s: Sort Type  c: CPU  enter: info  f: filter ".to_string());
+        .title("?: help  s: Sort Type  c: CPU  enter: info  f: filter  ctrl+k: kill ".to_string());
     f.render_widget(commands, Rect::new(0, cpu_height + 4, f.area().width, 1));
 }
 
