@@ -1,4 +1,4 @@
-use ratatui::style::Color;
+use ratatui::{style::Color, widgets::Widget};
 
 struct State {
     visible: SortedProcesses,
@@ -270,17 +270,21 @@ fn draw_top(f: &mut Frame, state: &State) {
             if y >= f.area().height {
                 break;
             }
-            draw_cpu(f, x, y, width, *cp / 100., None, &format!("{}", i + 1));
+            draw_sub_cpu(
+                f,
+                Rect::new(x, y, width, 1),
+                *cp / 100.,
+                &format!("{}", i + 1),
+            );
         }
     }
     let max_cpu = totals.cpus.iter().cloned().fold(0., f32::max) / 100.;
-    draw_cpu(
+    draw_cpu_summary(
         f,
-        0,
-        cpu_height,
-        48,
+        Rect::new(0, cpu_height, 48, 1),
         totals.cpu_avg / 100.,
-        Some(max_cpu),
+        max_cpu,
+        totals.cpus.iter().sum::<f32>() / 100.,
         &format!("Cpu x{}:", totals.cpu_count),
     );
 
@@ -318,17 +322,21 @@ fn draw_mem(totals: &Totals, f: &mut Frame, y: u16) {
             Style::default().fg(col),
         ),
     ]);
+    let len = line.iter().map(|s| s.content.len() as u16).sum::<u16>();
+    let mut rect = Rect::new(0, y, 48, 1);
+    line.render(rect, f.buffer_mut());
+    rect.x += len + 1;
+    rect.width = 25;
+
     gauge(
         f,
-        0,
-        y,
-        48,
+        rect,
         totals.memory as f32 / totals.memory_total as f32,
-        line,
+        "",
     )
 }
 
-fn gauge<T>(f: &mut Frame, x: u16, y: u16, width: u16, percentage: f32, title: T)
+fn gauge<T>(f: &mut Frame, rect: Rect, percentage: f32, title: T)
 where
     T: Into<Line<'static>>,
 {
@@ -343,7 +351,7 @@ where
         .unfilled_style(Style::new().fg(Color::DarkGray))
         .ratio(percentage as f64);
 
-    f.render_widget(gr, Rect::new(x, y, width, 1));
+    f.render_widget(gr, rect);
 }
 
 fn get_gradient(val: f32) -> Color {
@@ -353,36 +361,39 @@ fn get_gradient(val: f32) -> Color {
     Color::Rgb(red, green, 0)
 }
 
-fn draw_cpu(
-    f: &mut Frame,
-    x: u16,
-    y: u16,
-    width: u16,
-    cpu: f32,
-    max_cpu: Option<f32>,
-    title: &str,
-) {
-    let col = get_gradient(cpu);
+fn draw_sub_cpu(f: &mut Frame, rect: Rect, cpu: f32, title: &str) {
+    gauge(f, rect, cpu, format!("{title:>6} {:>5.1}%", cpu * 100.));
+}
+fn draw_cpu_summary(f: &mut Frame, rect: Rect, cpu: f32, max_cpu: f32, sum_cpu: f32, title: &str) {
     let mut details = vec![Span::raw(format!("{title:>6} "))];
     //only add for summary cpu:
 
-    if let Some(max_cpu) = max_cpu {
-        details.push(Span::styled(
-            format!("{:>5.1}%", cpu * 100.),
-            Style::default().fg(col),
-        ));
-        details.push(Span::raw(" (max ".to_string()));
-        let col = get_gradient(max_cpu);
-        details.push(Span::styled(
-            format!("{:.1}%", max_cpu * 100.),
-            Style::default().fg(col),
-        ));
-        details.push(Span::raw(")"));
-    } else {
-        details.push(Span::raw(format!("{:>5.1}%", cpu * 100.)));
-    }
+    let col_avg = get_gradient(cpu);
+    details.push(Span::raw(" Avg:"));
+    details.push(Span::styled(
+        format!("{:>5.1}%", cpu * 100.),
+        Style::default().fg(col_avg),
+    ));
+    let col_sum = get_gradient(sum_cpu);
+    details.push(Span::raw(" Sum:"));
+    details.push(Span::styled(
+        format!("{:>6.1}%", sum_cpu * 100.),
+        Style::default().fg(col_sum),
+    ));
 
-    gauge(f, x, y, width, cpu, Line::from(details));
+    details.push(Span::raw(" Max:".to_string()));
+    let col_max = get_gradient(max_cpu);
+    details.push(Span::styled(
+        format!("{:>5.1}%", max_cpu * 100.),
+        Style::default().fg(col_max),
+    ));
+    let len = details.iter().map(|s| s.content.len() as u16).sum::<u16>();
+    let line = Line::from(details);
+    f.render_widget(line, rect);
+    let mut rect = rect;
+    rect.x += len + 1;
+    rect.width = 25;
+    gauge(f, rect, cpu, "");
 }
 
 fn draw_table(f: &mut Frame, state: &State, tablestate: &mut TableState) {
