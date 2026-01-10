@@ -18,6 +18,8 @@ mode="Gui"
 ```
 
 
+Tui mode
+![Tui](Screenshot4.PNG)
 
 Gui mode
 ![Gui](Screenshot1.PNG)
@@ -28,8 +30,6 @@ Memory analysis
 SVG
 ![Gui](Screenshot3.PNG)
 
-Tui mode
-![Tui](Screenshot4.PNG)
 
 ### Operating modes 
 Run toprs with the following flags
