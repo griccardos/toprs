@@ -1,3 +1,5 @@
+use ratatui::style::Color;
+
 struct State {
     visible: SortedProcesses,
     procs: Vec<MyProcess>,
@@ -53,7 +55,7 @@ pub fn run(config: Config) -> Result<bool, std::io::Error> {
     while !done {
         terminal.draw(|f| {
             //get update if necessary
-            if last.elapsed().as_secs_f32() > 2. {
+            if last.elapsed().as_secs_f32() > state.config.tui.update_interval {
                 man.update();
                 state.procs = man.procs().clone();
                 state.sort();
@@ -174,8 +176,8 @@ fn draw_process_info(f: &mut Frame<'_>, proc: &MyProcess, parent: String) {
         format!("Run Time: {}", nice_time(proc.run_time)),
     ];
     if !parent.is_empty() {
-        lines.push(format!("Parent PID: {:?}", proc.parent));
-        lines.push(format!("Parent Name: {}", parent));
+        lines.insert(3, format!("Parent PID: {:?}", proc.parent));
+        lines.insert(4, format!("Parent Name: {}", parent));
     }
 
     let cmd_width = lines[2].len() as u16 + 2;
@@ -224,14 +226,16 @@ q/Esc      Exit
 z          Hide/show zero memory
 Home       Go to first row
 End        Go to last row
-g          Start gui mode
+g          Start GUI mode
 f          Filter processes
 c          Hide CPU cores
++/-        Increase/decrease interval
 command line arguments for modes:
--g         GUI
+-g         Graphical mode
 -t         Terminal mode
 -s <FILE>  save svg
 -o         output to stdout
+
                                              "#;
 
     let p = Paragraph::new(help)
@@ -284,7 +288,11 @@ fn draw_top(f: &mut Frame, state: &State) {
     let up = Block::default().title(format!("Uptime: {}", nice_time(state.totals.uptime)));
     f.render_widget(up, Rect::new(0, cpu_height + 2, f.area().width, 1));
 
-    let threads = Block::default().title(format!("Processes: {}", state.procs.len()));
+    let threads = Block::default().title(format!(
+        "Processes: {}   Interval: {}s",
+        state.procs.len(),
+        state.config.tui.update_interval
+    ));
     f.render_widget(threads, Rect::new(0, cpu_height + 3, f.area().width, 1));
 
     let commands = Block::default()
@@ -293,36 +301,56 @@ fn draw_top(f: &mut Frame, state: &State) {
 }
 
 fn draw_mem(totals: &Totals, f: &mut Frame, y: u16) {
+    let col = get_gradient(totals.memory as f32 / totals.memory_total as f32);
+    let line = Line::from(vec![
+        Span::raw("Memory: "),
+        Span::raw(format!(
+            "{}/{}",
+            nice_size_g(totals.memory),
+            nice_size_g(totals.memory_total)
+        )),
+        Span::styled(
+            format!(
+                "{:>5.1}%",
+                totals.memory as f32 / totals.memory_total as f32 * 100.
+            ),
+            Style::default().fg(col),
+        ),
+    ]);
     gauge(
         f,
         0,
         y,
         48,
         totals.memory as f32 / totals.memory_total as f32,
-        &format!(
-            "Memory: {}/{}",
-            nice_size_g(totals.memory),
-            nice_size_g(totals.memory_total)
-        ),
+        line,
     )
 }
 
-fn gauge(f: &mut Frame, x: u16, y: u16, width: u16, val: f32, title: &str) {
+fn gauge<T>(f: &mut Frame, x: u16, y: u16, width: u16, percentage: f32, title: T)
+where
+    T: Into<Line<'static>>,
+{
     //go from yellow to red depending on value by exponential gradient
+    let col = get_gradient(percentage);
+
+    let gr = LineGauge::default()
+        .label(title)
+        .filled_symbol("■")
+        .unfilled_symbol("━")
+        .filled_style(Style::new().fg(col))
+        .unfilled_style(Style::new().fg(Color::DarkGray))
+        .ratio(percentage as f64);
+
+    f.render_widget(gr, Rect::new(x, y, width, 1));
+}
+
+fn get_gradient(val: f32) -> Color {
     let red = 255;
     let green = (255. * (1. - val.min(1.).max(0.).powf(2.0))) as u8;
 
     let col = Color::Rgb(red, green, 0);
-
-    let gr = LineGauge::default()
-        .label(title)
-        .filled_symbol("▰")
-        .unfilled_symbol("▱")
-        .filled_style(Style::new().fg(col))
-        .unfilled_style(Style::new().fg(Color::DarkGray))
-        .ratio(val as f64);
-
-    f.render_widget(gr, Rect::new(x, y, width, 1));
+    col
 }
 
 fn draw_cpu(
@@ -334,22 +362,27 @@ fn draw_cpu(
     max_cpu: Option<f32>,
     title: &str,
 ) {
-    gauge(
-        f,
-        x,
-        y,
-        width,
-        cpu,
-        &format!(
-            "{title:>6} {:>5.1}%{}",
-            cpu * 100.,
-            if let Some(max_cpu) = max_cpu {
-                format!(" (max {:.1}%)", max_cpu * 100.)
-            } else {
-                "".to_string()
-            }
-        ),
-    );
+    let col = get_gradient(cpu);
+    let mut details = vec![Span::raw(format!("{title:>6} "))];
+    //only add for summary cpu:
+
+    if let Some(max_cpu) = max_cpu {
+        details.push(Span::styled(
+            format!("{:>5.1}%", cpu * 100.),
+            Style::default().fg(col),
+        ));
+        details.push(Span::raw(format!(" (max ")));
+        let col = get_gradient(max_cpu);
+        details.push(Span::styled(
+            format!("{:.1}%", max_cpu * 100.),
+            Style::default().fg(col),
+        ));
+        details.push(Span::raw(")"));
+    } else {
+        details.push(Span::raw(format!("{:>5.1}%", cpu * 100.)));
+    }
+
+    gauge(f, x, y, width, cpu, Line::from(details));
 }
 
 fn draw_table(f: &mut Frame, state: &State, tablestate: &mut TableState) {
@@ -574,6 +607,13 @@ fn handle_input(done: &mut bool, state: &mut State) {
                     }
                     state.sort();
                 }
+                KeyCode::Char('-') => {
+                    state.config.tui.update_interval =
+                        (state.config.tui.update_interval - 0.5).max(0.5);
+                }
+                KeyCode::Char('+') => {
+                    state.config.tui.update_interval += 0.5;
+                }
                 _ => {}
             }
         }
@@ -611,8 +651,8 @@ use ratatui::{
     Frame, Terminal,
     backend::CrosstermBackend,
     layout::{Constraint, Rect},
-    style::{Color, Style},
-    text::Line,
+    style::Style,
+    text::{Line, Span},
     widgets::{
         Block, BorderType, Borders, Cell, Clear, LineGauge, Padding, Paragraph, Row, Table,
         TableState, Widget,

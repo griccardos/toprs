@@ -15,6 +15,7 @@ pub struct TuiConfig {
     pub sort_column: usize,
     pub sort_type: SortType,
     pub show_cpu_per_core: bool,
+    pub update_interval: f32,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -41,6 +42,7 @@ impl Config {
                 sort_column: 0,
                 sort_type: SortType::None,
                 show_cpu_per_core: true,
+                update_interval: 2.0,
             },
         }
     }
