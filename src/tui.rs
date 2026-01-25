@@ -374,18 +374,18 @@ fn draw_cpu_summary(f: &mut Frame, rect: Rect, cpu: f32, max_cpu: f32, sum_cpu: 
         format!("{:>5.1}%", cpu * 100.),
         Style::default().fg(col_avg),
     ));
-    let col_sum = get_gradient(sum_cpu);
-    details.push(Span::raw(" Sum:"));
-    details.push(Span::styled(
-        format!("{:>6.1}%", sum_cpu * 100.),
-        Style::default().fg(col_sum),
-    ));
 
     details.push(Span::raw(" Max:".to_string()));
     let col_max = get_gradient(max_cpu);
     details.push(Span::styled(
         format!("{:>5.1}%", max_cpu * 100.),
         Style::default().fg(col_max),
+    ));
+    let col_sum = get_gradient(sum_cpu);
+    details.push(Span::raw(" Sum:"));
+    details.push(Span::styled(
+        format!("{:>6.1}%", sum_cpu * 100.),
+        Style::default().fg(col_sum),
     ));
     let len = details.iter().map(|s| s.content.len() as u16).sum::<u16>();
     let line = Line::from(details);
