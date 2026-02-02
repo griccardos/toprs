@@ -5,7 +5,8 @@ struct State {
     procs: Vec<MyProcess>,
     totals: Totals,
     selected: usize,
-    selected_kill: usize,
+    kill_signal: usize,
+    kill_process: Option<MyProcess>,
     top5memory: Vec<usize>,
     top5cpu: Vec<usize>,
     start_gui: bool,
@@ -28,7 +29,8 @@ pub fn run(config: Config) -> Result<bool, std::io::Error> {
         procs: man.procs().clone(),
         visible: SortedProcesses::new(),
         selected: 0,
-        selected_kill: 9,
+        kill_signal: 9,
+        kill_process: None,
         totals: man.get_totals(),
         top5memory: vec![],
         top5cpu: vec![],
@@ -85,7 +87,7 @@ pub fn run(config: Config) -> Result<bool, std::io::Error> {
                 draw_process_info(f, proc, parent);
             }
             if state.show_kill {
-                draw_kill(f, &mut tablestate_kill);
+                draw_kill(f, &mut tablestate_kill, &state);
             }
 
             if state.searching {
@@ -102,8 +104,8 @@ pub fn run(config: Config) -> Result<bool, std::io::Error> {
                 .min(state.visible.procs().len().saturating_sub(1));
             tablestate.select(Some(state.selected));
 
-            state.selected_kill = state.selected_kill.min(20);
-            tablestate_kill.select(Some(state.selected_kill));
+            state.kill_signal = state.kill_signal.min(20);
+            tablestate_kill.select(Some(state.kill_signal));
         })?;
     }
 
@@ -124,7 +126,11 @@ pub fn run(config: Config) -> Result<bool, std::io::Error> {
     Ok(state.start_gui)
 }
 
-fn draw_kill(f: &mut Frame<'_>, tablestate: &mut TableState) {
+fn draw_kill(f: &mut Frame<'_>, tablestate: &mut TableState, state: &State) {
+    let Some(proc) = &state.kill_process else {
+        return;
+    };
+
     let rows = vec![
         "0: Cancel",
         "1: SIGHUP - Hangup",
@@ -161,7 +167,7 @@ fn draw_kill(f: &mut Frame<'_>, tablestate: &mut TableState) {
             .borders(Borders::ALL)
             .padding(Padding::horizontal(2))
             .border_style(Style::default().fg(Color::Red))
-            .title("Kill")
+            .title(format!("Send signal to {} ({})", proc.name, proc.pid))
             .border_type(BorderType::Rounded),
     );
 
@@ -556,36 +562,29 @@ fn handle_input(done: &mut bool, state: &mut State) {
         } else if state.show_kill {
             match key.code {
                 KeyCode::Down | KeyCode::Char('j') => {
-                    state.selected_kill = (state.selected_kill + 1).min(20)
+                    state.kill_signal = (state.kill_signal + 1).min(20)
                 }
                 KeyCode::Char(c) if c >= '0' && c <= '9' => {
-                    state.selected_kill = c as usize - '0' as usize;
+                    state.kill_signal = c as usize - '0' as usize;
                 }
                 KeyCode::Up | KeyCode::Char('k') => {
-                    state.selected_kill = state.selected_kill.saturating_sub(1)
+                    state.kill_signal = state.kill_signal.saturating_sub(1)
                 }
                 KeyCode::Esc => state.show_kill = false,
                 KeyCode::Enter => {
-                    if state.selected_kill == 0 {
+                    if state.kill_signal == 0 {
                         //cancel
-                        state.show_kill = false;
                     } else {
                         //send signal
-                        let signal = state.selected_kill as i32;
-                        if let Some(pid) = state
-                            .visible
-                            .procs()
-                            .get(state.selected)
-                            .and_then(|p| p.get(2))
-                            .and_then(|s| s.parse::<usize>().ok())
-                        {
+                        let signal = state.kill_signal as i32;
+                        if let Some(proc) = &state.kill_process {
                             let _ = Command::new("kill")
                                 .arg(format!("-{signal}"))
-                                .arg(format!("{pid}"))
+                                .arg(format!("{}", proc.pid))
                                 .output();
                         }
-                        state.show_kill = false;
                     }
+                    state.show_kill = false;
                 }
                 _ => {}
             }
@@ -616,7 +615,19 @@ fn handle_input(done: &mut bool, state: &mut State) {
                     state.start_gui = true
                 }
                 KeyCode::Char('k') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                    state.show_kill = !state.show_kill
+                    state.show_kill = !state.show_kill;
+                    if let Some(pid) = state
+                        .visible
+                        .procs()
+                        .get(state.selected)
+                        .and_then(|a| a.get(2))
+                    {
+                        state.kill_process = state
+                            .procs
+                            .iter()
+                            .find(|a| a.pid.to_string() == *pid)
+                            .cloned();
+                    }
                 }
                 KeyCode::Down | KeyCode::Char('j') => {
                     state.selected = (state.selected + 1).min(state.visible.procs().len() - 1)
