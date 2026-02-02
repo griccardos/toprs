@@ -1,6 +1,6 @@
 [package]
 name = "toprs"
-version = "0.6.1"
+version = "0.6.2"
 edition = "2024"
 description = "Cross platform memory focused top"
 repository = "https://github.com/griccardos/toprs/"
@@ -12,24 +12,22 @@ authors = ["https://github.com/griccardos"]
 
 [features]
 default = ["gui"]
-gui = ["dep:dioxus", "dep:dioxus-desktop"]
+gui = ["dep:dioxus", "dep:dioxus-desktop", "dep:image", "dep:tokio"]
 
 [dependencies]
 crossterm = "0.29"
-dioxus = { version = "0.7.2", optional = true }         #gui
-dioxus-desktop = { version = "0.7.2", optional = true } #gui
-formato = "0.3.0"                                       #format numbers
-gumdrop = "0.8.1"                                       #arguments
-sysinfo = "0.37"                                        #get system info
-tokio = { version = "1", features = ["time"] }          #sleep
-ratatui = "0.30"                                        #console tui
-dirs = "6"                                              #for load config from home
-toml = "0.9"                                            #for config
-serde = { version = "1.0", features = ["derive"] }      #for config
-image = "0.25"                                          #for icon
-zbus = ">=5.12, <5.13"                                  #temp fix incompatible gui deps of zbus/rfd/zvarient
-zvariant = ">=5.8, <5.9"                                #temp fix incompatible gui deps of zbus/rfd/zvarient
-
+formato = "0.3.0"                                  #format numbers
+gumdrop = "0.8.1"                                  #arguments
+sysinfo = "0.38"                                   #get system info
+ratatui = "0.30"                                   #console tui
+dirs = "6"                                         #for load config from home
+toml = "0.9"                                       #for config
+serde = { version = "1.0", features = ["derive"] } #for config
+#gui
+dioxus = { version = "0.7.3", optional = true }                 #gui
+dioxus-desktop = { version = "0.7.3", optional = true }         #gui
+image = { version = "0.25", optional = true }                   #for icon
+tokio = { version = "1", features = ["time"], optional = true } #sleep
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3", features = ["wincon", "winuser"] }
 

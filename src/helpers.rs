@@ -4,6 +4,7 @@ pub fn nice_size(val: u64) -> String {
     nice_size_ops(val, false)
 }
 
+#[cfg(feature = "gui")]
 pub fn nice_size_thousands(val: u64) -> String {
     nice_size_ops(val, true)
 }
@@ -27,6 +28,7 @@ pub fn nice_size_g(val: u64) -> String {
     format!("{:.1}G", val as f64 / 1024. / 1024. / 1024.)
 }
 
+#[cfg(feature = "gui")]
 pub fn nice_size_g_thousands(val: u64) -> String {
     (val as f64 / 1024. / 1024. / 1024.).formato("#,###.0G")
 }

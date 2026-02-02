@@ -16,6 +16,8 @@ struct State {
     show_kill: bool,
     show_help: bool,
     config: Config,
+    searching: bool, //change selection to match
+    search: String,  //for changing selection search
 }
 
 pub fn run(config: Config) -> Result<bool, std::io::Error> {
@@ -26,7 +28,7 @@ pub fn run(config: Config) -> Result<bool, std::io::Error> {
         procs: man.procs().clone(),
         visible: SortedProcesses::new(),
         selected: 0,
-        selected_kill: 0,
+        selected_kill: 9,
         totals: man.get_totals(),
         top5memory: vec![],
         top5cpu: vec![],
@@ -38,6 +40,8 @@ pub fn run(config: Config) -> Result<bool, std::io::Error> {
         show_kill: false,
         show_help: false,
         config,
+        searching: false,
+        search: String::new(),
     };
     state.visible.sort_col = state.config.tui.sort_column;
     state.visible.sort_type = state.config.tui.sort_type;
@@ -84,7 +88,11 @@ pub fn run(config: Config) -> Result<bool, std::io::Error> {
                 draw_kill(f, &mut tablestate_kill);
             }
 
-            draw_filter(f, &state);
+            if state.searching {
+                draw_search(f, &state);
+            } else if state.filtering || !state.filter.is_empty() {
+                draw_filter(f, &state);
+            }
 
             handle_input(&mut done, &mut state);
 
@@ -206,15 +214,24 @@ fn draw_process_info(f: &mut Frame<'_>, proc: &MyProcess, parent: String) {
 }
 
 fn draw_filter(f: &mut Frame, state: &State) {
-    if state.filtering || !state.filter.is_empty() {
-        let mut style = Style::default();
-        if state.filtering {
-            style = style.bg(Color::Green).fg(Color::Black);
-        }
-        let top_height = get_cores_height(state) + 4;
-        let p = Paragraph::new(format!("Filter: {}", state.filter)).style(style);
-        f.render_widget(p, Rect::new(f.area().width - 40, top_height, 40, 1));
+    let mut style = Style::default();
+    if state.filtering {
+        style = style.bg(Color::Green).fg(Color::Black);
+    } else {
+        style = style.fg(Color::Green);
     }
+    let top_height = get_cores_height(state) + 4;
+    let p = Paragraph::new(format!("Filter: {}", state.filter)).style(style);
+    f.render_widget(p, Rect::new(f.area().width - 40, top_height, 40, 1));
+}
+fn draw_search(f: &mut Frame, state: &State) {
+    let mut style = Style::default();
+    if state.searching {
+        style = style.bg(Color::Green).fg(Color::Black);
+    }
+    let top_height = get_cores_height(state) + 4;
+    let p = Paragraph::new(format!("Search: {}", state.search)).style(style);
+    f.render_widget(p, Rect::new(f.area().width - 40, top_height, 40, 1));
 }
 fn draw_help(f: &mut Frame) {
     let help = r#"?/F1        Help menu
@@ -300,8 +317,10 @@ fn draw_top(f: &mut Frame, state: &State) {
     ));
     f.render_widget(threads, Rect::new(0, cpu_height + 3, f.area().width, 1));
 
-    let commands = Block::default()
-        .title("?: help  s: Sort Type  c: CPU  enter: info  f: filter  ctrl+k: kill ".to_string());
+    let commands = Block::default().title(
+        "?: help  s: Sort Type  c: CPU  enter: info  f: filter  /:search  ctrl+k: kill "
+            .to_string(),
+    );
     f.render_widget(commands, Rect::new(0, cpu_height + 4, f.area().width, 1));
 }
 
@@ -507,6 +526,23 @@ fn handle_input(done: &mut bool, state: &mut State) {
                 _ => {}
             }
             state.visible.set_filter(state.filter.clone());
+        } else if state.searching {
+            match key.code {
+                KeyCode::Esc | KeyCode::Enter => {
+                    state.searching = false;
+                    state.search.clear();
+                }
+                KeyCode::Char(c) => {
+                    state.search.push(c);
+                    state.update_search();
+                }
+                KeyCode::Backspace => {
+                    let _ = state.search.pop();
+                    state.update_search();
+                }
+                _ => {}
+            }
+            state.visible.set_filter(state.filter.clone());
         } else if state.show_help {
             match key.code {
                 KeyCode::Esc | KeyCode::Char('?') | KeyCode::F(1) => state.show_help = false,
@@ -522,7 +558,9 @@ fn handle_input(done: &mut bool, state: &mut State) {
                 KeyCode::Down | KeyCode::Char('j') => {
                     state.selected_kill = (state.selected_kill + 1).min(20)
                 }
-
+                KeyCode::Char(c) if c >= '0' && c <= '9' => {
+                    state.selected_kill = c as usize - '0' as usize;
+                }
                 KeyCode::Up | KeyCode::Char('k') => {
                     state.selected_kill = state.selected_kill.saturating_sub(1)
                 }
@@ -567,6 +605,9 @@ fn handle_input(done: &mut bool, state: &mut State) {
                 }
                 KeyCode::Char('f') => {
                     state.filtering = !state.filtering;
+                }
+                KeyCode::Char('/') => {
+                    state.searching = true;
                 }
                 KeyCode::Char('z') => state.visible.hidezeros = !state.visible.hidezeros,
                 KeyCode::Char('?') | KeyCode::F(1) => state.show_help = !state.show_help,
@@ -643,6 +684,16 @@ impl State {
         let mut temp = self.procs.to_vec();
         temp.sort_by(|a, b| b.cpu.partial_cmp(&a.cpu).unwrap());
         self.top5cpu = temp.iter().map(|f| f.pid).take(5).collect();
+    }
+
+    fn update_search(&mut self) {
+        //we find the first process matching the search string
+        if let Some(pos) = self.visible.procs().iter().position(|a| {
+            a.iter()
+                .any(|a| a.to_lowercase().contains(&self.search.to_lowercase()))
+        }) {
+            self.selected = pos;
+        }
     }
 }
 

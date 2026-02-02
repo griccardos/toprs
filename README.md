@@ -67,5 +67,5 @@ Flamegraph blue portion is child memory, and red/yellow is its own memory
 Shoutout to the following projects that made this possible:
 - rust Sysinfo lib
 - GUI mode uses Dioxus to manage window and contents
-- TUI mode uses tuirs 
+- TUI mode uses ratatui
 - Plotly for chart
