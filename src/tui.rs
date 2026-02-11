@@ -505,7 +505,7 @@ fn draw_table(f: &mut Frame, state: &State, tablestate: &mut TableState) {
     let command_width = (f.area().width.max(85) - 85).max(25);
     let widths = [
         Constraint::Min(command_width),
-        Constraint::Min(25),
+        Constraint::Length(15),
         Constraint::Length(10),
         Constraint::Length(10),
         Constraint::Length(10),
