@@ -512,9 +512,13 @@ fn draw_table(f: &mut Frame, state: &State, tablestate: &mut TableState) {
         Constraint::Length(10),
         Constraint::Length(10),
     ];
+    let highlight = match state.selected {
+        Selected::Index(_) => Color::Rgb(200, 200, 200),
+        Selected::Proc(_) => Color::LightYellow,
+    };
     let t = Table::new(rows, widths)
         .header(header_cells)
-        .row_highlight_style(Style::default().bg(Color::LightYellow).fg(Color::Black));
+        .row_highlight_style(Style::default().bg(highlight).fg(Color::Black));
 
     let mut rect = f.area();
     rect.y += top_height;
