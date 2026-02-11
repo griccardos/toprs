@@ -4,6 +4,7 @@ pub struct MyProcess {
     pub parent: usize,
     pub name: String,
     pub command: String,
+    pub command_display: String, //for table view
     pub memory: u64,
     pub cpu: f32,
     pub children_memory: u64,

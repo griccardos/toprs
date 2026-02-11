@@ -46,14 +46,14 @@ impl SortedProcesses {
                     true
                 } else {
                     x.name.to_lowercase().contains(&self.filter.to_lowercase())
-                        || x.command
+                        || x.command_display
                             .to_lowercase()
                             .contains(&self.filter.to_lowercase())
                 }
             })
             .map(|f| {
                 vec![
-                    f.command.clone(),
+                    f.command_display.clone(),
                     f.name.clone(),
                     f.pid.to_string(),
                     nice_size(f.memory),
@@ -67,9 +67,11 @@ impl SortedProcesses {
 
     fn sort(&mut self) {
         match self.sort_col {
-            0 => self
-                .procs
-                .sort_by(|a, b| b.command.to_lowercase().cmp(&a.command.to_lowercase())),
+            0 => self.procs.sort_by(|a, b| {
+                b.command_display
+                    .to_lowercase()
+                    .cmp(&a.command_display.to_lowercase())
+            }),
             1 => self
                 .procs
                 .sort_by(|a, b| b.name.to_lowercase().cmp(&a.name.to_lowercase())),
@@ -150,7 +152,7 @@ impl SortedProcesses {
                 }
             }
 
-            child.command = format!("{sym}{}", child.command);
+            child.command_display = format!("{sym}{}", child.command_display);
             result.push(child);
         }
         *procs = result;

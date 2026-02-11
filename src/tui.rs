@@ -4,7 +4,7 @@ struct State {
     visible: SortedProcesses,
     procs: Vec<MyProcess>,
     totals: Totals,
-    selected: usize,
+    selected: Selected,
     kill_signal: usize,
     kill_process: Option<MyProcess>,
     top5memory: Vec<usize>,
@@ -20,6 +20,10 @@ struct State {
     searching: bool, //change selection to match
     search: String,  //for changing selection search
 }
+enum Selected {
+    Index(usize),
+    Proc(usize),
+}
 
 pub fn run(config: Config) -> Result<bool, std::io::Error> {
     enable_raw_mode()?;
@@ -28,7 +32,7 @@ pub fn run(config: Config) -> Result<bool, std::io::Error> {
     let mut state = State {
         procs: man.procs().clone(),
         visible: SortedProcesses::new(),
-        selected: 0,
+        selected: Selected::Index(0),
         kill_signal: 9,
         kill_process: None,
         totals: man.get_totals(),
@@ -67,6 +71,7 @@ pub fn run(config: Config) -> Result<bool, std::io::Error> {
                 state.sort();
                 state.totals = man.get_totals();
                 last = Instant::now();
+                sync_selection(&mut state, &mut tablestate);
             }
 
             draw_top(f, &state);
@@ -98,11 +103,7 @@ pub fn run(config: Config) -> Result<bool, std::io::Error> {
 
             handle_input(&mut done, &mut state);
 
-            //update selected for table
-            state.selected = state
-                .selected
-                .min(state.visible.procs().len().saturating_sub(1));
-            tablestate.select(Some(state.selected));
+            sync_selection(&mut state, &mut tablestate);
 
             state.kill_signal = state.kill_signal.min(20);
             tablestate_kill.select(Some(state.kill_signal));
@@ -124,6 +125,22 @@ pub fn run(config: Config) -> Result<bool, std::io::Error> {
     )?;
 
     Ok(state.start_gui)
+}
+
+fn sync_selection(state: &mut State, tablestate: &mut TableState) {
+    //ensure selected is in limits
+    match state.selected {
+        Selected::Index(ind) => {
+            state.selected =
+                Selected::Index(ind.min(state.visible.procs().len().saturating_sub(1)));
+        }
+        Selected::Proc(pid) => {
+            if !state.procs.iter().any(|p| p.pid == pid) {
+                state.selected = Selected::Index(0);
+            }
+        }
+    }
+    tablestate.select(index_of_selected(&*state));
 }
 
 fn draw_kill(f: &mut Frame<'_>, tablestate: &mut TableState, state: &State) {
@@ -240,11 +257,8 @@ fn draw_search(f: &mut Frame, state: &State) {
     f.render_widget(p, Rect::new(f.area().width - 40, top_height, 40, 1));
 }
 fn draw_help(f: &mut Frame) {
-    let help = r#"?/F1        Help menu
-Up         Scroll up
-Down       Scroll down
-Left       Sort by column to left
-Right      Sort by column to right
+    let help = r#"↑/↓ j/k    Scroll
+←/→  h/l   Change column to sort
 s          Sort Asc/Desc/None
 q/Esc      Exit
 z          Hide/show zero memory
@@ -252,13 +266,15 @@ Home       Go to first row
 End        Go to last row
 g          Start GUI mode
 f          Filter processes
+F          Follow process
+/          Search for process
 c          Hide CPU cores
-+/-        Increase/decrease interval
++/-        Change update interval
 command line arguments for modes:
 -g         Graphical mode
--t         Terminal mode
--s <FILE>  save svg
--o         output to stdout
+-t         Terminal mode (default)
+-s <FILE>  save svg of memory graph
+-o         output to stdout and exit
 
                                              "#;
 
@@ -324,25 +340,26 @@ fn draw_top(f: &mut Frame, state: &State) {
     f.render_widget(threads, Rect::new(0, cpu_height + 3, f.area().width, 1));
 
     let commands = Block::default().title(
-        "?: help  s: Sort Type  c: CPU  enter: info  f: filter  /:search  ctrl+k: kill "
+        "?: help  s: Sort  c: CPU  enter: info  f: filter  /:search  F: follow  ctrl+k: kill "
             .to_string(),
     );
     f.render_widget(commands, Rect::new(0, cpu_height + 4, f.area().width, 1));
 }
 
 fn draw_mem(totals: &Totals, f: &mut Frame, y: u16) {
-    let col = get_gradient(totals.memory as f32 / totals.memory_total as f32);
+    let col = get_gradient(totals.memory_procs as f32 / totals.memory_total as f32);
     let line = Line::from(vec![
         Span::raw("Memory: "),
         Span::raw(format!(
-            "{}/{}",
-            nice_size_g(totals.memory),
+            "procs: {} used: {}/{}",
+            nice_size_g(totals.memory_procs),
+            nice_size_g(totals.memory_used),
             nice_size_g(totals.memory_total)
         )),
         Span::styled(
             format!(
                 "{:>5.1}%",
-                totals.memory as f32 / totals.memory_total as f32 * 100.
+                totals.memory_procs as f32 / totals.memory_total as f32 * 100.
             ),
             Style::default().fg(col),
         ),
@@ -356,7 +373,7 @@ fn draw_mem(totals: &Totals, f: &mut Frame, y: u16) {
     gauge(
         f,
         rect,
-        totals.memory as f32 / totals.memory_total as f32,
+        totals.memory_procs as f32 / totals.memory_total as f32,
         "",
     )
 }
@@ -469,13 +486,13 @@ fn draw_table(f: &mut Frame, state: &State, tablestate: &mut TableState) {
                 };
                 let pid = f[2].parse::<usize>().unwrap();
 
-                let mut style = if state.top5memory.contains(&pid) && (i == 3 || i < 2) {
+                let mut style = if state.top5memory.contains(&pid) && (i == 3 || i == 1) {
                     Style::default().fg(Color::LightRed)
                 } else {
                     Style::default()
                 };
 
-                if state.top5cpu.contains(&pid) && (i == 6 || i < 2) {
+                if state.top5cpu.contains(&pid) && (i == 6 || i == 1) {
                     style = Style::default().fg(Color::Magenta);
                 }
 
@@ -605,6 +622,18 @@ fn handle_input(done: &mut bool, state: &mut State) {
                 KeyCode::Char('f') => {
                     state.filtering = !state.filtering;
                 }
+                KeyCode::Char('F') => {
+                    if let Selected::Index(ind) = state.selected {
+                        if let Some(pid) = state
+                            .visible
+                            .procs()
+                            .get(ind)
+                            .map(|cols| cols[2].parse::<usize>().unwrap_or_default())
+                        {
+                            state.selected = Selected::Proc(pid);
+                        }
+                    }
+                }
                 KeyCode::Char('/') => {
                     state.searching = true;
                 }
@@ -616,44 +645,22 @@ fn handle_input(done: &mut bool, state: &mut State) {
                 }
                 KeyCode::Char('k') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                     state.show_kill = !state.show_kill;
-                    if let Some(pid) = state
-                        .visible
-                        .procs()
-                        .get(state.selected)
-                        .and_then(|a| a.get(2))
-                    {
-                        state.kill_process = state
-                            .procs
-                            .iter()
-                            .find(|a| a.pid.to_string() == *pid)
-                            .cloned();
-                    }
+                    let proc = process_at_selected(state);
+                    state.kill_process = proc;
                 }
-                KeyCode::Down | KeyCode::Char('j') => {
-                    state.selected = (state.selected + 1).min(state.visible.procs().len() - 1)
-                }
-
-                KeyCode::Up | KeyCode::Char('k') => {
-                    state.selected = state.selected.saturating_sub(1)
-                }
-                KeyCode::PageDown => {
-                    state.selected = (state.selected + 20).min(state.visible.procs().len() - 1)
-                }
-                KeyCode::PageUp => state.selected = state.selected.saturating_sub(20),
-                KeyCode::Home => state.selected = 0,
-                KeyCode::End => state.selected = state.visible.procs().len() - 1,
+                KeyCode::Down | KeyCode::Char('j') => move_by(state, 1),
+                KeyCode::Up | KeyCode::Char('k') => move_by(state, -1),
+                KeyCode::PageDown => move_by(state, 20),
+                KeyCode::PageUp => move_by(state, -20),
+                KeyCode::Home => move_by(state, isize::MIN),
+                KeyCode::End => move_by(state, isize::MAX),
                 KeyCode::Enter => {
                     if state.show_info.is_some() {
                         state.show_info = None;
                         return;
                     }
-                    if !state.visible.procs().is_empty()
-                        && state.selected < state.visible.procs().len()
-                    {
-                        let pid = state.visible.procs()[state.selected][2]
-                            .parse::<usize>()
-                            .unwrap();
-                        state.show_info = Some(pid);
+                    if let Some(proc) = process_at_selected(state) {
+                        state.show_info = Some(proc.pid);
                     }
                 }
                 KeyCode::Left | KeyCode::Char('h') => {
@@ -670,6 +677,11 @@ fn handle_input(done: &mut bool, state: &mut State) {
                     }
                     state.sort();
                 }
+                KeyCode::Char('t') => {
+                    state.visible.sort_col = 0;
+                    state.visible.sort_type = SortType::None;
+                    state.sort();
+                }
                 KeyCode::Char('-') => {
                     state.config.tui.update_interval =
                         (state.config.tui.update_interval - 0.5).max(0.5);
@@ -679,6 +691,56 @@ fn handle_input(done: &mut bool, state: &mut State) {
                 }
                 _ => {}
             }
+        }
+    }
+}
+fn index_of_selected(state: &State) -> Option<usize> {
+    match state.selected {
+        Selected::Index(ind) => Some(ind),
+        Selected::Proc(pid) => state
+            .visible
+            .procs()
+            .iter()
+            .position(|a| a[2].parse::<usize>() == Ok(pid)),
+    }
+}
+fn process_at_selected(state: &State) -> Option<MyProcess> {
+    match state.selected {
+        Selected::Index(ind) => state
+            .visible
+            .procs()
+            .get(ind)
+            .and_then(|a| a.get(2))
+            .and_then(|pid_s| {
+                state
+                    .procs
+                    .iter()
+                    .find(|a| a.pid.to_string() == *pid_s)
+                    .cloned()
+            }),
+        Selected::Proc(pid) => state.procs.iter().find(|a| a.pid == pid).cloned(),
+    }
+}
+
+fn move_by(state: &mut State, by: isize) {
+    match state.selected {
+        Selected::Index(ind) => {
+            state.selected = Selected::Index(
+                (ind.saturating_add_signed(by)).min(state.visible.procs().len() - 1),
+            );
+        }
+        Selected::Proc(pid) => {
+            let mut ind = state
+                .visible
+                .procs()
+                .iter()
+                .position(|a| a[2].parse::<usize>().unwrap_or_default() == pid)
+                .unwrap_or(0);
+            ind = ind
+                .saturating_add_signed(by)
+                .min(state.visible.procs().len() - 1);
+            state.selected =
+                Selected::Proc(state.visible.procs()[ind][2].parse::<usize>().unwrap());
         }
     }
 }
@@ -699,11 +761,11 @@ impl State {
 
     fn update_search(&mut self) {
         //we find the first process matching the search string
-        if let Some(pos) = self.visible.procs().iter().position(|a| {
+        if let Some(proc) = self.visible.procs().iter().find(|a| {
             a.iter()
                 .any(|a| a.to_lowercase().contains(&self.search.to_lowercase()))
         }) {
-            self.selected = pos;
+            self.selected = Selected::Proc(proc[2].parse::<usize>().unwrap_or_default());
         }
     }
 }

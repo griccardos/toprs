@@ -123,6 +123,7 @@ fn draw_pid(
             run_time: 0,
             children_memory: tot,
             command: "".to_string(),
+            command_display: "".to_string(),
             depth: 0,
         };
         t = &to;

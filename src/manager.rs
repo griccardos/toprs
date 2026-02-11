@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::{collections::HashSet, path::PathBuf, str::FromStr};
 
 use sysinfo::{CpuRefreshKind, MemoryRefreshKind, RefreshKind, System};
 
@@ -31,7 +31,8 @@ impl ProcManager {
     pub fn get_totals(&self) -> Totals {
         //there is a difference between the sum of the procs resident memory and total memory as per sysinfo.
         //we use sum of proc resident memory to be consistent with proc display
-        let memory = self.procs.iter().map(|x| x.memory).sum();
+        let memory_procs = self.procs.iter().map(|x| x.memory).sum();
+        let memory_used = self.system.used_memory();
         //sometimes on macos cpu is nan
         let cpus: Vec<f32> = self
             .system
@@ -45,7 +46,8 @@ impl ProcManager {
         let cpu_avg = cpu_total / cpu_count as f32;
 
         Totals {
-            memory,
+            memory_procs,
+            memory_used,
             cpu_avg,
             cpu_count,
             cpus,
@@ -65,7 +67,8 @@ impl NoNan for f32 {
 }
 
 pub struct Totals {
-    pub memory: u64,
+    pub memory_procs: u64,
+    pub memory_used: u64,
     pub memory_total: u64,
     pub cpu_avg: f32,
     pub cpu_count: usize,
@@ -99,17 +102,41 @@ fn update_procs(sys: &mut System) -> Vec<MyProcess> {
         .map(|x| x.1)
         .filter(|x| x.thread_kind() != Some(sysinfo::ThreadKind::Userland))
         .map(|x| {
+            let long_cmd: Vec<String> = x
+                .cmd()
+                .iter()
+                .map(|os| os.clone().into_string().unwrap_or_default())
+                .collect();
             let cmd = match x.exe() {
                 Some(s) if s.as_os_str().is_empty() => x.name().to_string_lossy().to_string(),
                 Some(s) => s.to_string_lossy().to_string(),
                 None => x.name().to_string_lossy().to_string(),
             };
+            let full_cmd = if long_cmd.is_empty() {
+                cmd.clone()
+            } else {
+                let long_cmd_path = PathBuf::from_str(&long_cmd[0]).unwrap_or_default();
+                let long_cmd_path = long_cmd_path
+                    .file_name()
+                    .unwrap_or_default()
+                    .to_string_lossy();
+                let cmd_path = PathBuf::from_str(&cmd).unwrap_or_default();
+                let cmd_path = cmd_path.file_name().unwrap_or_default().to_string_lossy();
+
+                if long_cmd_path == cmd_path {
+                    format!("{cmd_path} {}", long_cmd[1..].join(" "))
+                } else {
+                    format!("{cmd_path}|{}", long_cmd.join(" "))
+                }
+            };
+            // let full_cmd = format!("{cmd} | {}", long_cmd.join(" "));
 
             MyProcess {
                 pid: x.pid().into(),
                 parent: x.parent().map_or(0, |f| f.into()),
                 name: x.name().to_string_lossy().to_string(),
-                command: cmd,
+                command: long_cmd.join(" "),
+                command_display: full_cmd,
                 memory: x.memory(),
                 cpu: x.cpu_usage(),
                 children_memory: 0,

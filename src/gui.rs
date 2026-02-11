@@ -44,15 +44,16 @@ fn app() -> Element {
     let mut man = use_signal(ProcManager::new);
     let mut my_svg = use_signal(|| "".to_string());
     let top5 = get_top5(man.read().procs());
+
     let mut max_depth = use_signal(|| top5.iter().map(|x| x.depth).max().unwrap_or(5));
     let totals = man.read().get_totals();
-    let mem = nice_size_g_thousands(totals.memory);
+    let mem = nice_size_g_thousands(totals.memory_procs);
     let totmem = nice_size_g_thousands(totals.memory_total);
     let cpu = format!("{:5>.1}% x{}", totals.cpu_avg, totals.cpu_count);
     let cpupercent = format!("{:.1}%", totals.cpu_avg);
     let mempercent = format!(
         "{:.1}%",
-        totals.memory as f64 / totals.memory_total as f64 * 100.
+        totals.memory_procs as f64 / totals.memory_total as f64 * 100.
     );
     let uptime = nice_time(totals.uptime);
     let mut live = use_signal(|| true);

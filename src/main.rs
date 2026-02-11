@@ -85,20 +85,38 @@ fn run_tui(config: Config) {
 fn run_output() {
     let man = manager::ProcManager::new();
     let procs = man.procs();
-    println!("pid\tparent\tname\tmemself\tmemchildren\tmemtotal");
+    let mut lines: Vec<Vec<String>> = vec![];
+    lines.push(vec![
+        "name".to_string(),
+        "pid".to_string(),
+        "parent".to_string(),
+        "memself".to_string(),
+        "memchildren".to_string(),
+        "memtotal".to_string(),
+        "cpu".to_string(),
+    ]);
     for p in procs {
-        {
-            println!(
-                "{}\t{:?}\t{}\t{}\t{}\t{}\t{}",
-                p.pid,
-                p.parent,
-                p.name,
-                p.memory,
-                p.children_memory,
-                p.total(),
-                p.cpu
-            );
+        lines.push(vec![
+            p.name.to_string(),
+            p.pid.to_string(),
+            p.parent.to_string(),
+            p.memory.to_string(),
+            p.children_memory.to_string(),
+            p.total().to_string(),
+            p.cpu.to_string(),
+        ]);
+    }
+    let widths: Vec<usize> = lines[0]
+        .iter()
+        .enumerate()
+        .map(|(i, _)| lines.iter().map(|a| a[i].len()).max().unwrap_or_default() + 1)
+        .collect();
+    //output each line, buffered by space
+    for line in lines {
+        for (i, &col) in widths.iter().enumerate() {
+            print!("{: <col$}", line[i]);
         }
+        println!();
     }
 }
 
