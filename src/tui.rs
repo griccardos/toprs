@@ -513,8 +513,8 @@ fn draw_table(f: &mut Frame, state: &State, tablestate: &mut TableState) {
         Constraint::Length(10),
     ];
     let highlight = match state.selected {
-        Selected::Index(_) => Color::Rgb(200, 200, 200),
-        Selected::Proc(_) => Color::LightYellow,
+        Selected::Index(_) => Color::LightYellow,
+        Selected::Proc(_) => Color::LightRed,
     };
     let t = Table::new(rows, widths)
         .header(header_cells)
@@ -626,18 +626,23 @@ fn handle_input(done: &mut bool, state: &mut State) {
                 KeyCode::Char('f') => {
                     state.filtering = !state.filtering;
                 }
-                KeyCode::Char('F') => {
-                    if let Selected::Index(ind) = state.selected {
-                        if let Some(pid) = state
-                            .visible
-                            .procs()
-                            .get(ind)
-                            .map(|cols| cols[2].parse::<usize>().unwrap_or_default())
-                        {
-                            state.selected = Selected::Proc(pid);
+                KeyCode::Char('F') => match state.selected {
+                    Selected::Index(_) => {
+                        if let Some(proc) = process_at_selected(state) {
+                            state.selected = Selected::Proc(proc.pid);
                         }
                     }
-                }
+                    Selected::Proc(pid) => {
+                        state.selected = Selected::Index(
+                            state
+                                .visible
+                                .procs()
+                                .iter()
+                                .position(|p| p[2].parse::<usize>().unwrap_or_default() == pid)
+                                .unwrap_or(0),
+                        );
+                    }
+                },
                 KeyCode::Char('/') => {
                     state.searching = true;
                 }
