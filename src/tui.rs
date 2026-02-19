@@ -442,35 +442,37 @@ fn draw_table(f: &mut Frame, state: &State, tablestate: &mut TableState) {
     let top_height = get_cores_height(state) + 5;
 
     let header_cells = Row::new(
-        ["Command", "Name", "PID", "Self", "Children", "Total", "CPU"]
-            .iter()
-            .enumerate()
-            .map(|(i, h)| {
-                let mut name = h.to_string();
-                let mut style = Style::default().fg(Color::Black).bg(Color::LightBlue);
+        [
+            "Command", "Name", "PID", "Self", "Children", "Total", "CPU", "Disk",
+        ]
+        .iter()
+        .enumerate()
+        .map(|(i, h)| {
+            let mut name = h.to_string();
+            let mut style = Style::default().fg(Color::Black).bg(Color::LightBlue);
 
-                if i == state.visible.sort_col {
-                    style = Style::default().fg(Color::White).bg(Color::LightRed);
+            if i == state.visible.sort_col {
+                style = Style::default().fg(Color::White).bg(Color::LightRed);
 
-                    match state.visible.sort_type {
-                        SortType::Ascending => {
-                            name.push_str(" ↑");
-                        }
-
-                        SortType::Descending => {
-                            name.push_str(" ↓");
-                        }
-                        _ => {}
+                match state.visible.sort_type {
+                    SortType::Ascending => {
+                        name.push_str(" ↑");
                     }
-                }
-                let name = if (2..=6).contains(&i) {
-                    format!("{name:>10}")
-                } else {
-                    name
-                };
 
-                Cell::from(name).style(style)
-            }),
+                    SortType::Descending => {
+                        name.push_str(" ↓");
+                    }
+                    _ => {}
+                }
+            }
+            let name = if (2..).contains(&i) {
+                format!("{name:>10}")
+            } else {
+                name
+            };
+
+            Cell::from(name).style(style)
+        }),
     )
     .style(Style::default().bg(Color::LightBlue));
 
@@ -481,7 +483,7 @@ fn draw_table(f: &mut Frame, state: &State, tablestate: &mut TableState) {
         .map(|f| {
             Row::new(f.iter().enumerate().map(|(i, c)| {
                 let val = match i {
-                    2..=6 => format!("{c:>10}"),
+                    2.. => format!("{c:>10}"),
                     _ => c.to_string(),
                 };
                 let pid = f[2].parse::<usize>().unwrap();
@@ -506,6 +508,7 @@ fn draw_table(f: &mut Frame, state: &State, tablestate: &mut TableState) {
     let widths = [
         Constraint::Min(command_width),
         Constraint::Length(15),
+        Constraint::Length(10),
         Constraint::Length(10),
         Constraint::Length(10),
         Constraint::Length(10),
@@ -680,7 +683,7 @@ fn handle_input(done: &mut bool, state: &mut State) {
                     state.sort();
                 }
                 KeyCode::Right | KeyCode::Char('l') => {
-                    state.visible.sort_col = (state.visible.sort_col + 1).min(6);
+                    state.visible.sort_col = (state.visible.sort_col + 1).min(7);
                     if state.visible.sort_col > 0 && state.visible.sort_type == SortType::None {
                         state.visible.sort_type = SortType::Descending;
                     }

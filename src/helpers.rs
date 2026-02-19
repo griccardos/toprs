@@ -1,23 +1,38 @@
 use formato::Formato;
 
-pub fn nice_size(val: u64) -> String {
+pub trait IntoF64 {
+    fn into_f64<T>(&self) -> f64;
+}
+impl IntoF64 for f64 {
+    fn into_f64<T>(&self) -> f64 {
+        *self
+    }
+}
+impl IntoF64 for u64 {
+    fn into_f64<T>(&self) -> f64 {
+        *self as f64
+    }
+}
+
+pub fn nice_size<T: IntoF64>(val: T) -> String {
     nice_size_ops(val, false)
 }
 
 #[cfg(feature = "gui")]
-pub fn nice_size_thousands(val: u64) -> String {
+pub fn nice_size_thousands<T: IntoF64>(val: T) -> String {
     nice_size_ops(val, true)
 }
 
-fn nice_size_ops(val: u64, include_thousands: bool) -> String {
+fn nice_size_ops<T: IntoF64>(val: T, include_thousands: bool) -> String {
     let format = if include_thousands { "#,###.0" } else { "#.0" };
-    if val == 0 {
+    let val: f64 = val.into_f64::<T>();
+    if val == 0.0 {
         "".to_string()
-    } else if val < 5000 {
-        format!("{val}B")
-    } else if val < 500 * 1024 {
+    } else if val < 5000.0 {
+        format!("{}B", (val as f64).formato(format))
+    } else if val < 500.0 * 1024.0 {
         format!("{}K", (val as f64 / 1024.).formato(format))
-    } else if val < 50000 * 1024 * 1024 {
+    } else if val < 50000.0 * 1024.0 * 1024.0 {
         format!("{}M", (val as f64 / 1024. / 1024.).formato(format))
     } else {
         format!("{}G", (val as f64 / 1024. / 1024. / 1024.).formato(format))

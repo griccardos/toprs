@@ -1,4 +1,4 @@
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct MyProcess {
     pub pid: usize,
     pub parent: usize,
@@ -7,6 +7,7 @@ pub struct MyProcess {
     pub command_display: String, //for table view
     pub memory: u64,
     pub cpu: f32,
+    pub disk: f64,
     pub children_memory: u64,
     pub depth: usize,
     pub run_time: u64,

@@ -1,4 +1,4 @@
-use std::{collections::HashSet, path::PathBuf, str::FromStr};
+use std::{collections::HashSet, path::PathBuf, str::FromStr, time::Instant};
 
 use sysinfo::{CpuRefreshKind, MemoryRefreshKind, RefreshKind, System};
 
@@ -7,6 +7,7 @@ use crate::myprocess::MyProcess;
 pub struct ProcManager {
     procs: Vec<MyProcess>,
     system: System,
+    last_update: Instant,
 }
 
 impl ProcManager {
@@ -17,12 +18,25 @@ impl ProcManager {
                 .with_memory(MemoryRefreshKind::everything()),
         );
 
-        let procs = update_procs(&mut system);
+        let mut procs = update_procs(&mut system);
+        //remove all disk on the first update, as they have movement
+        procs.iter_mut().for_each(|p| p.disk = 0.0);
 
-        Self { procs, system }
+        Self {
+            procs,
+            system,
+            last_update: Instant::now(),
+        }
     }
     pub fn update(&mut self) {
         self.procs = update_procs(&mut self.system);
+        //calc writes per second
+        self.procs.iter_mut().for_each(|p| {
+            p.disk /= Instant::now()
+                .saturating_duration_since(self.last_update)
+                .as_secs_f64()
+        });
+        self.last_update = Instant::now();
     }
     pub fn procs(&self) -> &Vec<MyProcess> {
         &self.procs
@@ -142,6 +156,7 @@ fn update_procs(sys: &mut System) -> Vec<MyProcess> {
                 children_memory: 0,
                 run_time: x.run_time(),
                 depth: 0,
+                disk: (x.disk_usage().read_bytes + x.disk_usage().written_bytes) as f64,
             }
         })
         .filter(|x| x.pid != 0) //dont want root or errors

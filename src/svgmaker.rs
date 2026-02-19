@@ -115,16 +115,9 @@ fn draw_pid(
             .map(|s| s.total())
             .sum();
         to = MyProcess {
-            pid: 0,
-            parent: 0,
             name: "all".to_string(),
-            memory: 0,
-            cpu: 0.,
-            run_time: 0,
             children_memory: tot,
-            command: "".to_string(),
-            command_display: "".to_string(),
-            depth: 0,
+            ..Default::default()
         };
         t = &to;
 

@@ -60,6 +60,11 @@ impl SortedProcesses {
                     nice_size(f.children_memory),
                     nice_size(f.total()),
                     format!("{:.1}%", f.cpu),
+                    if f.disk == 0. {
+                        "".to_string()
+                    } else {
+                        format!("{}/s", nice_size(f.disk))
+                    },
                 ]
             })
             .collect()
@@ -84,6 +89,9 @@ impl SortedProcesses {
             6 => self
                 .procs
                 .sort_by(|a, b| b.cpu.partial_cmp(&a.cpu).unwrap()),
+            7 => self
+                .procs
+                .sort_by(|a, b| b.disk.partial_cmp(&a.disk).unwrap()),
 
             _ => unreachable!(),
         }
