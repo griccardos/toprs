@@ -59,9 +59,15 @@ impl SortedProcesses {
                     nice_size(f.memory),
                     nice_size(f.children_memory),
                     nice_size(f.total()),
-                    format!("{:.1}%", f.cpu),
+                    //cpu
+                    if f.cpu == 0. {
+                        String::new()
+                    } else {
+                        format!("{:.1}%", f.cpu)
+                    },
+                    //disk
                     if f.disk == 0. {
-                        "".to_string()
+                        String::new()
                     } else {
                         format!("{}/s", nice_size(f.disk))
                     },

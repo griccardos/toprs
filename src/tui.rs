@@ -260,7 +260,7 @@ fn draw_help(f: &mut Frame) {
     let help = r#"↑/↓ j/k    Scroll
 ←/→  h/l   Change column to sort
 s          Sort Asc/Desc/None
-q/Esc      Exit
+q          Exit
 z          Hide/show zero memory
 Home       Go to first row
 End        Go to last row
@@ -614,7 +614,7 @@ fn handle_input(done: &mut bool, state: &mut State) {
             }
         } else {
             match key.code {
-                KeyCode::Char('q') | KeyCode::Esc => *done = true,
+                KeyCode::Char('q') => *done = true,
                 KeyCode::Char('s') => {
                     state.visible.sort_cycle();
                     state.sort();
