@@ -1,6 +1,6 @@
 use std::{collections::HashSet, path::PathBuf, str::FromStr, time::Instant};
 
-use sysinfo::{CpuRefreshKind, MemoryRefreshKind, RefreshKind, System};
+use sysinfo::{CpuRefreshKind, MemoryRefreshKind, ProcessRefreshKind, RefreshKind, System};
 
 use crate::myprocess::MyProcess;
 
@@ -15,6 +15,7 @@ impl ProcManager {
         let mut system = System::new_with_specifics(
             RefreshKind::nothing()
                 .with_cpu(CpuRefreshKind::everything())
+                .with_processes(ProcessRefreshKind::everything())
                 .with_memory(MemoryRefreshKind::everything()),
         );
 
