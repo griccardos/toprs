@@ -359,7 +359,7 @@ fn draw_mem(totals: &Totals, f: &mut Frame, y: u16) {
         Span::styled(
             format!(
                 "{:>5.1}%",
-                totals.memory_procs as f32 / totals.memory_total as f32 * 100.
+                totals.memory_used as f32 / totals.memory_total as f32 * 100.
             ),
             Style::default().fg(col),
         ),
