@@ -13,29 +13,39 @@ impl IntoF64 for u64 {
         *self as f64
     }
 }
-
+///this has no thousand separate and is blank if zero
+///Used as standard in table
 pub fn nice_size<T: IntoF64>(val: T) -> String {
-    nice_size_ops(val, false)
+    nice_size_ops(val, false, true)
 }
 
 #[cfg(feature = "gui")]
 pub fn nice_size_thousands<T: IntoF64>(val: T) -> String {
-    nice_size_ops(val, true)
+    nice_size_ops(val, true, true)
 }
 
-fn nice_size_ops<T: IntoF64>(val: T, include_thousands: bool) -> String {
+///breaks down into B,K,M,G,T depending on the value
+///we tend to prefer M a bit more
+pub fn nice_size_ops<T: IntoF64>(val: T, include_thousands: bool, zero_blank: bool) -> String {
     let format = if include_thousands { "#,###.0" } else { "#.0" };
+    let format0 = if include_thousands { "#,###" } else { "#" };
     let val: f64 = val.into_f64::<T>();
-    if val == 0.0 {
+    if val == 0.0 && zero_blank {
         "".to_string()
     } else if val < 5000.0 {
-        format!("{}B", (val as f64).formato(format))
-    } else if val < 500.0 * 1024.0 {
+        format!("{}B", (val as f64).formato(format0))
+    } else if val < 5000.0 * 1024.0 {
         format!("{}K", (val as f64 / 1024.).formato(format))
+        //we prefer M for process view, so we weight it a bit more than the others
     } else if val < 50000.0 * 1024.0 * 1024.0 {
         format!("{}M", (val as f64 / 1024. / 1024.).formato(format))
-    } else {
+    } else if val < 5000.0 * 1024.0 * 1024.0 * 1024.0 {
         format!("{}G", (val as f64 / 1024. / 1024. / 1024.).formato(format))
+    } else {
+        format!(
+            "{}T",
+            (val as f64 / 1024. / 1024. / 1024. / 1024.).formato(format)
+        )
     }
 }
 

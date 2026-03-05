@@ -1,11 +1,17 @@
 use std::{collections::HashSet, path::PathBuf, str::FromStr, time::Instant};
 
-use sysinfo::{CpuRefreshKind, MemoryRefreshKind, ProcessRefreshKind, RefreshKind, System};
+use sysinfo::{
+    CpuRefreshKind, MemoryRefreshKind, Networks, ProcessRefreshKind, RefreshKind, System,
+};
 
-use crate::myprocess::MyProcess;
+use crate::{mynetwork::MyNetwork, myprocess::MyProcess};
 
 pub struct ProcManager {
     procs: Vec<MyProcess>,
+    network_data: Vec<MyNetwork>,
+
+    //sysinfo objects
+    networks: Networks,
     system: System,
     last_update: Instant,
 }
@@ -22,11 +28,14 @@ impl ProcManager {
         let mut procs = update_procs(&mut system);
         //remove all disk on the first update, as they have movement
         procs.iter_mut().for_each(|p| p.disk = 0.0);
+        let networks = Networks::new_with_refreshed_list();
 
         Self {
             procs,
             system,
             last_update: Instant::now(),
+            networks,
+            network_data: vec![],
         }
     }
     pub fn update(&mut self) {
@@ -37,10 +46,15 @@ impl ProcManager {
                 .saturating_duration_since(self.last_update)
                 .as_secs_f64()
         });
+        self.update_network_data();
         self.last_update = Instant::now();
     }
     pub fn procs(&self) -> &Vec<MyProcess> {
         &self.procs
+    }
+
+    pub fn get_networks(&self) -> Vec<MyNetwork> {
+        self.network_data.clone()
     }
 
     pub fn get_totals(&self) -> Totals {
@@ -69,6 +83,37 @@ impl ProcManager {
             uptime: System::uptime(),
             memory_total: self.system.total_memory(),
         }
+    }
+
+    fn update_network_data(&mut self) {
+        self.networks.refresh(true);
+
+        for n in self.networks.iter().filter(|n| n.0 != "lo") {
+            let received_per_sec = n.1.received()
+                / Instant::now()
+                    .saturating_duration_since(self.last_update)
+                    .as_secs_f64() as u64;
+            let sent_per_sec = n.1.transmitted()
+                / Instant::now()
+                    .saturating_duration_since(self.last_update)
+                    .as_secs_f64() as u64;
+
+            if let Some(net) = self.network_data.iter_mut().find(|a| &a.name == n.0) {
+                net.received += n.1.received();
+                net.sent += n.1.transmitted();
+                net.received_per_sec = received_per_sec;
+                net.sent_per_sec = sent_per_sec;
+            } else {
+                self.network_data.push(MyNetwork {
+                    name: n.0.to_string(),
+                    received: n.1.received(),
+                    sent: n.1.transmitted(),
+                    received_per_sec: received_per_sec,
+                    sent_per_sec: sent_per_sec,
+                });
+            }
+        }
+        // eprintln!("updated network data: {:?}", self.network_data);
     }
 }
 

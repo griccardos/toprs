@@ -1,24 +1,27 @@
 use ratatui::{style::Color, widgets::Widget};
 
 struct State {
-    visible: SortedProcesses,
+    //data
     procs: Vec<MyProcess>,
+    visible: SortedProcesses,
     totals: Totals,
-    selected: Selected,
-    kill_signal: usize,
-    kill_process: Option<MyProcess>,
     top5memory: Vec<usize>,
     top5cpu: Vec<usize>,
-    start_gui: bool,
-    filter: String,
-    filtering: bool,
-    hide_cores: bool,
+    networks: Vec<MyNetwork>,
+
+    //view state
     show_info: Option<usize>,
     show_kill: bool,
     show_help: bool,
-    config: Config,
+    filter: String,
+    filtering: bool,
+    selected: Selected,
+    start_gui: bool,
+    kill_signal: usize,
+    kill_process: Option<MyProcess>,
     searching: bool, //change selection to match
     search: String,  //for changing selection search
+    config: Config,
 }
 enum Selected {
     Index(usize),
@@ -34,24 +37,24 @@ pub fn run(config: Config) -> Result<bool, std::io::Error> {
         visible: SortedProcesses::new(),
         selected: Selected::Index(0),
         kill_signal: 9,
-        kill_process: None,
         totals: man.get_totals(),
+        config,
+
+        kill_process: None,
         top5memory: vec![],
         top5cpu: vec![],
         start_gui: false,
         filter: String::new(),
         filtering: false,
-        hide_cores: false,
         show_info: None,
         show_kill: false,
         show_help: false,
-        config,
         searching: false,
         search: String::new(),
+        networks: vec![],
     };
     state.visible.sort_col = state.config.tui.sort_column;
     state.visible.sort_type = state.config.tui.sort_type;
-    state.hide_cores = !state.config.tui.show_cpu_per_core;
     state.sort();
     execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
 
@@ -70,6 +73,7 @@ pub fn run(config: Config) -> Result<bool, std::io::Error> {
                 state.procs = man.procs().clone();
                 state.sort();
                 state.totals = man.get_totals();
+                state.networks = man.get_networks();
                 last = Instant::now();
                 sync_selection(&mut state, &mut tablestate);
             }
@@ -113,7 +117,6 @@ pub fn run(config: Config) -> Result<bool, std::io::Error> {
     //save config
     state.config.tui.sort_column = state.visible.sort_col;
     state.config.tui.sort_type = state.visible.sort_type;
-    state.config.tui.show_cpu_per_core = !state.hide_cores;
     state.config.save();
 
     // restore terminal
@@ -301,22 +304,10 @@ fn draw_top(f: &mut Frame, state: &State) {
     let cpu_height = get_cores_height(state);
 
     //draw cpus
-    if !state.hide_cores {
-        for (i, cp) in state.totals.cpus.iter().enumerate() {
-            let width = f.area().width / 4;
-            let x = (i % 4) as u16 * width;
-            let y = (i / 4) as u16;
-            if y >= f.area().height {
-                break;
-            }
-            draw_sub_cpu(
-                f,
-                Rect::new(x, y, width, 1),
-                *cp / 100.,
-                &format!("{}", i + 1),
-            );
-        }
+    if state.config.tui.show_cpu_per_core {
+        draw_cpu_cores(f, state);
     }
+
     let max_cpu = totals.cpus.iter().cloned().fold(0., f32::max) / 100.;
     draw_cpu_summary(
         f,
@@ -328,22 +319,72 @@ fn draw_top(f: &mut Frame, state: &State) {
     );
 
     draw_mem(totals, f, cpu_height + 1);
+    draw_uptime(f, state, cpu_height + 2);
+    draw_network(state, f, cpu_height + 3);
+    draw_process_interval(f, state, cpu_height + 4);
+    draw_commands(f, cpu_height + 5);
+}
 
+fn draw_uptime(f: &mut Frame<'_>, state: &State, cpu_height: u16) {
     let up = Block::default().title(format!("Uptime: {}", nice_time(state.totals.uptime)));
-    f.render_widget(up, Rect::new(0, cpu_height + 2, f.area().width, 1));
+    f.render_widget(up, Rect::new(0, cpu_height, f.area().width, 1));
+}
 
+fn draw_cpu_cores(f: &mut Frame<'_>, state: &State) {
+    for (i, cp) in state.totals.cpus.iter().enumerate() {
+        let width = f.area().width / 4;
+        let x = (i % 4) as u16 * width;
+        let y = (i / 4) as u16;
+        if y >= f.area().height {
+            break;
+        }
+        draw_sub_cpu(
+            f,
+            Rect::new(x, y, width, 1),
+            *cp / 100.,
+            &format!("{}", i + 1),
+        );
+    }
+}
+
+fn draw_commands(f: &mut Frame<'_>, y: u16) {
+    let commands = Block::default().title(
+        "?: help  s: Sort  c: CPU  enter: info  f: filter  /:search  F: follow  ctrl+k: kill "
+            .to_string(),
+    );
+
+    f.render_widget(commands, Rect::new(0, y, f.area().width, 1));
+}
+
+fn draw_process_interval(f: &mut Frame<'_>, state: &State, cpu_height: u16) {
     let threads = Block::default().title(format!(
         "Processes: {}   Interval: {}s",
         state.procs.len(),
         state.config.tui.update_interval
     ));
-    f.render_widget(threads, Rect::new(0, cpu_height + 3, f.area().width, 1));
+    f.render_widget(threads, Rect::new(0, cpu_height, f.area().width, 1));
+}
 
-    let commands = Block::default().title(
-        "?: help  s: Sort  c: CPU  enter: info  f: filter  /:search  F: follow  ctrl+k: kill "
-            .to_string(),
-    );
-    f.render_widget(commands, Rect::new(0, cpu_height + 4, f.area().width, 1));
+fn draw_network(state: &State, f: &mut Frame<'_>, y: u16) {
+    let mut spans = vec![Span::raw("Network: ")];
+    let nets: Vec<_> = state
+        .networks
+        .iter()
+        .filter(|n| n.received > 0 || n.sent > 0)
+        .map(|n| {
+            Span::raw(format!(
+                "{} ↓ {} ↑ {}     ↓ {}/s ↑ {}/s",
+                n.name,
+                nice_size_ops(n.received, true, false),
+                nice_size_ops(n.sent, true, false),
+                nice_size_ops(n.received_per_sec, true, false),
+                nice_size_ops(n.sent_per_sec, true, false)
+            ))
+        })
+        .collect();
+    spans.extend(nets);
+    let line = Line::from(spans);
+    f.render_widget(line, Rect::new(0, y, f.area().width, 1));
 }
 
 fn draw_mem(totals: &Totals, f: &mut Frame, y: u16) {
@@ -439,7 +480,7 @@ fn draw_cpu_summary(f: &mut Frame, rect: Rect, cpu: f32, max_cpu: f32, sum_cpu: 
 }
 
 fn draw_table(f: &mut Frame, state: &State, tablestate: &mut TableState) {
-    let top_height = get_cores_height(state) + 5;
+    let top_height = get_cores_height(state) + 6;
 
     let header_cells = Row::new(
         [
@@ -530,10 +571,10 @@ fn draw_table(f: &mut Frame, state: &State, tablestate: &mut TableState) {
 }
 
 fn get_cores_height(state: &State) -> u16 {
-    if state.hide_cores {
-        0
-    } else {
+    if state.config.tui.show_cpu_per_core {
         state.totals.cpus.len() as u16 / 4
+    } else {
+        0
     }
 }
 
@@ -623,7 +664,7 @@ fn handle_input(done: &mut bool, state: &mut State) {
                     if key.modifiers.contains(KeyModifiers::CONTROL) {
                         *done = true
                     } else {
-                        state.hide_cores = !state.hide_cores;
+                        state.config.tui.show_cpu_per_core = !state.config.tui.show_cpu_per_core;
                     }
                 }
                 KeyCode::Char('f') => {
@@ -808,8 +849,9 @@ use ratatui::{
 
 use crate::{
     config::Config,
-    helpers::{nice_size, nice_size_g, nice_time},
+    helpers::{nice_size, nice_size_g, nice_size_ops, nice_time},
     manager::{self, Totals},
+    mynetwork::MyNetwork,
     myprocess::MyProcess,
     sorted::{SortType, SortedProcesses},
 };

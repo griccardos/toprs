@@ -3,6 +3,7 @@ mod config;
 mod gui;
 mod helpers;
 mod manager;
+mod mynetwork;
 mod myprocess;
 mod sorted;
 mod svgmaker;
