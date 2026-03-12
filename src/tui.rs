@@ -414,7 +414,7 @@ fn draw_mem(totals: &Totals, f: &mut Frame, y: u16) {
     gauge(
         f,
         rect,
-        totals.memory_procs as f32 / totals.memory_total as f32,
+        totals.memory_used as f32 / totals.memory_total as f32,
         "",
     )
 }
@@ -425,6 +425,7 @@ where
 {
     //go from yellow to red depending on value by exponential gradient
     let col = get_gradient(percentage);
+    let percentage = percentage.clamp(0., 1.);
 
     let gr = LineGauge::default()
         .label(title)
