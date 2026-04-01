@@ -15,6 +15,7 @@ pub struct SortedProcesses {
     pub sort_type: SortType,
     pub hidezeros: bool,
     pub filter: String,
+    pub hide_children: HashSet<usize>, //hide children of this process(used for tree view only)
     procs: Vec<MyProcess>,
 }
 
@@ -26,11 +27,19 @@ impl SortedProcesses {
             procs: vec![],
             hidezeros: true,
             filter: String::new(),
+            hide_children: Default::default(),
         }
     }
 
     pub fn set_filter(&mut self, str: String) {
         self.filter = str;
+    }
+    pub fn hide_children_invert(&mut self, pid: usize) {
+        if self.hide_children.contains(&pid) {
+            self.hide_children.remove(&pid);
+        } else {
+            self.hide_children.insert(pid);
+        }
     }
 
     pub fn update(&mut self, procs: &[MyProcess]) {
@@ -38,7 +47,8 @@ impl SortedProcesses {
         self.sort();
     }
     pub fn procs(&self) -> Vec<Vec<String>> {
-        self.procs
+        let mut procs = self
+            .procs
             .iter()
             .filter(|f| if self.hidezeros { f.memory != 0 } else { true })
             .filter(|x| {
@@ -51,6 +61,15 @@ impl SortedProcesses {
                             .contains(&self.filter.to_lowercase())
                 }
             })
+            .collect::<Vec<_>>();
+        //now remove all the children of the minimized pids, only if tree view
+        if self.sort_col == 0 {
+            let pids_to_remove: HashSet<usize> = recurse_children(&procs, &self.hide_children);
+            procs.retain(|a| !pids_to_remove.contains(&a.pid));
+        }
+
+        procs
+            .iter()
             .map(|f| {
                 vec![
                     f.command_display.clone(),
@@ -182,6 +201,26 @@ impl SortedProcesses {
             (_, SortType::Descending) => self.sort_type = SortType::Ascending,
         }
     }
+}
+
+fn recurse_children(procs: &[&MyProcess], parents: &HashSet<usize>) -> HashSet<usize> {
+    if parents.is_empty() {
+        return Default::default();
+    }
+    let mut children: HashSet<usize> = HashSet::new();
+    //remove parents
+    for parent in parents {
+        for proc in procs {
+            if &proc.parent == parent {
+                children.insert(proc.pid);
+            }
+        }
+    }
+    children = children
+        .union(&recurse_children(procs, &children))
+        .cloned()
+        .collect();
+    children
 }
 
 ///this returns the children of given, their level

@@ -349,7 +349,7 @@ fn draw_cpu_cores(f: &mut Frame<'_>, state: &State) {
 
 fn draw_commands(f: &mut Frame<'_>, y: u16) {
     let commands = Block::default().title(
-        "?: help  s: Sort  c: CPU  enter: info  f: filter  /:search  F: follow  ctrl+k: kill "
+        "?: help  s: Sort  c: CPU  enter: info  f: filter  /:search  F: follow  ctrl+k: kill  m: collapse children"
             .to_string(),
     );
 
@@ -524,7 +524,7 @@ fn draw_table(f: &mut Frame, state: &State, tablestate: &mut TableState) {
         .iter()
         .map(|f| {
             Row::new(f.iter().enumerate().map(|(i, c)| {
-                let val = match i {
+                let mut val = match i {
                     2.. => format!("{c:>10}"),
                     _ => c.to_string(),
                 };
@@ -535,6 +535,13 @@ fn draw_table(f: &mut Frame, state: &State, tablestate: &mut TableState) {
                 } else {
                     Style::default()
                 };
+                if i == 0
+                    && state.visible.hide_children.contains(&pid)
+                    && state.visible.sort_col == 0
+                {
+                    style = Style::default().fg(Color::LightGreen);
+                    val = format!("{val} [Collapsed]");
+                }
 
                 if state.top5cpu.contains(&pid) && (i == 6 || i == 1) {
                     style = Style::default().fg(Color::Magenta);
@@ -670,6 +677,13 @@ fn handle_input(done: &mut bool, state: &mut State) {
                 }
                 KeyCode::Char('f') => {
                     state.filtering = !state.filtering;
+                }
+                KeyCode::Char('m') => {
+                    if state.visible.sort_col == 0 {
+                        if let Some(proc) = process_at_selected(state) {
+                            state.visible.hide_children_invert(proc.pid);
+                        }
+                    }
                 }
                 KeyCode::Char('F') => match state.selected {
                     Selected::Index(_) => {
