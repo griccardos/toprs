@@ -60,14 +60,17 @@ fn app() -> Element {
     let mut visible = use_signal(SortedProcesses::new);
     let processes = use_signal(|| man.read().procs().len());
 
-    update_sunburst(man, max_depth);
-
     use_coroutine(move |_: UnboundedReceiver<()>| async move {
         loop {
             if *live.read() {
                 man.with_mut(|s| s.update());
-                my_svg.set(svgmaker::generate_svg(man.read().procs()));
-                visible.write().update(man.read().procs());
+                let procs = man.read();
+                let procs = procs.procs();
+                my_svg.set(svgmaker::generate_svg(procs));
+                visible.write().update(procs);
+
+                //update starburst data
+                update_sunburst(procs, max_depth);
             }
             tokio::time::sleep(Duration::from_millis(2000)).await;
         }
@@ -177,12 +180,8 @@ fn app() -> Element {
     }
 }
 
-fn update_sunburst(
-    man: Signal<ProcManager>,
-    //eval: &std::rc::Rc<dyn Fn(&str) -> Result<UseEval, EvalError>>,
-    max: Signal<usize>,
-) {
-    let (l, p, v, t, m, c) = get_labels_parents_values(man.read().procs());
+fn update_sunburst(procs: &Vec<MyProcess>, max: Signal<usize>) {
+    let (l, p, v, t, m, c) = get_labels_parents_values(procs);
     let js = r##"
 
      var data = [{
@@ -210,7 +209,16 @@ fn update_sunburst(
          width: 1400,
          height: 1000
          };
-         Plotly.newPlot('myDiv',data,layout,{displaylogo: false});
+         var el = document.getElementById('myDiv');
+                 if (el && el._fullLayout) {
+                     // Preserve the user's current drill-down level across refreshes
+                     if (el._fullData && el._fullData[0] && el._fullData[0].level) {
+                         data[0].level = el._fullData[0].level;
+                     }
+                     Plotly.react('myDiv', data, layout, {displaylogo: false});
+                 } else {
+                     Plotly.newPlot('myDiv', data, layout, {displaylogo: false});
+                 }
      "##;
     let js = js
         .replace("LABELS", &l)

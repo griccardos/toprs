@@ -90,13 +90,17 @@ impl ProcManager {
 
         for n in self.networks.iter().filter(|n| n.0 != "lo") {
             let received_per_sec = n.1.received()
-                / Instant::now()
-                    .saturating_duration_since(self.last_update)
-                    .as_secs_f64() as u64;
+                / 1.max(
+                    Instant::now()
+                        .saturating_duration_since(self.last_update)
+                        .as_secs_f64() as u64,
+                );
             let sent_per_sec = n.1.transmitted()
-                / Instant::now()
-                    .saturating_duration_since(self.last_update)
-                    .as_secs_f64() as u64;
+                / 1.max(
+                    Instant::now()
+                        .saturating_duration_since(self.last_update)
+                        .as_secs_f64() as u64,
+                );
 
             if let Some(net) = self.network_data.iter_mut().find(|a| &a.name == n.0) {
                 net.received += n.1.received();
