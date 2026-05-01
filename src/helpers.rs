@@ -1,35 +1,22 @@
 use formato::Formato;
 
-pub trait IntoF64 {
-    fn into_f64<T>(&self) -> f64;
-}
-impl IntoF64 for f64 {
-    fn into_f64<T>(&self) -> f64 {
-        *self
-    }
-}
-impl IntoF64 for u64 {
-    fn into_f64<T>(&self) -> f64 {
-        *self as f64
-    }
-}
 ///this has no thousand separate and is blank if zero
 ///Used as standard in table
-pub fn nice_size<T: IntoF64>(val: T) -> String {
+pub fn nice_size(val: u64) -> String {
     nice_size_ops(val, false, true)
 }
 
 #[cfg(feature = "gui")]
-pub fn nice_size_thousands<T: IntoF64>(val: T) -> String {
+pub fn nice_size_thousands(val: u64) -> String {
     nice_size_ops(val, true, true)
 }
 
 ///breaks down into B,K,M,G,T depending on the value
 ///we tend to prefer M a bit more
-pub fn nice_size_ops<T: IntoF64>(val: T, include_thousands: bool, zero_blank: bool) -> String {
+pub fn nice_size_ops(val: u64, include_thousands: bool, zero_blank: bool) -> String {
     let format = if include_thousands { "#,###.0" } else { "#.0" };
     let format0 = if include_thousands { "#,###" } else { "#" };
-    let val: f64 = val.into_f64::<T>();
+    let val = val as f64;
     if val == 0.0 && zero_blank {
         "".to_string()
     } else if val < 5000.0 {

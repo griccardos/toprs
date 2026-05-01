@@ -92,7 +92,7 @@ impl SortedProcesses {
                     if f.disk == 0. {
                         String::new()
                     } else {
-                        format!("{}/s", nice_size(f.disk))
+                        format!("{}/s", nice_size(f.disk as u64))
                     },
                 ]
             })
