@@ -1,10 +1,13 @@
-use std::{collections::HashSet, path::PathBuf, str::FromStr, time::Instant};
-
+use crate::{mynetwork::MyNetwork, myprocess::MyProcess};
+use std::{
+    collections::{HashMap, HashSet},
+    path::PathBuf,
+    str::FromStr,
+    time::Instant,
+};
 use sysinfo::{
     CpuRefreshKind, MemoryRefreshKind, Networks, ProcessRefreshKind, RefreshKind, System,
 };
-
-use crate::{mynetwork::MyNetwork, myprocess::MyProcess};
 
 pub struct ProcManager {
     procs: Vec<MyProcess>,
@@ -87,20 +90,12 @@ impl ProcManager {
 
     fn update_network_data(&mut self) {
         self.networks.refresh(true);
-
+        let elapsed = Instant::now()
+            .saturating_duration_since(self.last_update)
+            .as_secs_f64() as u64;
         for n in self.networks.iter().filter(|n| n.0 != "lo") {
-            let received_per_sec = n.1.received()
-                / 1.max(
-                    Instant::now()
-                        .saturating_duration_since(self.last_update)
-                        .as_secs_f64() as u64,
-                );
-            let sent_per_sec = n.1.transmitted()
-                / 1.max(
-                    Instant::now()
-                        .saturating_duration_since(self.last_update)
-                        .as_secs_f64() as u64,
-                );
+            let received_per_sec = n.1.received() / 1.max(elapsed);
+            let sent_per_sec = n.1.transmitted() / 1.max(elapsed);
 
             if let Some(net) = self.network_data.iter_mut().find(|a| &a.name == n.0) {
                 net.received += n.1.received();
@@ -117,7 +112,6 @@ impl ProcManager {
                 });
             }
         }
-        // eprintln!("updated network data: {:?}", self.network_data);
     }
 }
 
@@ -142,20 +136,24 @@ pub struct Totals {
 
 ///we add up the value of all the children
 fn update_children_usage(procs: &mut Vec<MyProcess>) {
-    for i in 0..procs.len() {
-        let size = sum_of_children(procs[i].pid, procs);
-        procs[i].children_memory = size;
-    }
-}
+    // pid -> index
+    let index_map: HashMap<usize, usize> =
+        HashMap::from_iter(procs.iter().enumerate().map(|(i, p)| (p.pid, i)));
 
-fn sum_of_children(this_pid: usize, vec: &Vec<MyProcess>) -> u64 {
-    let mut size = 0;
-    for proc in vec {
-        if proc.parent == this_pid && proc.pid != 0 {
-            size += sum_of_children(proc.pid, vec) + proc.memory;
+    // process deepest first so children accumulate before parents
+    let mut indices: Vec<usize> = (0..procs.len()).collect();
+    indices.sort_by(|&a, &b| procs[b].depth.cmp(&procs[a].depth));
+
+    for &i in &indices {
+        let parent = procs[i].parent;
+        if parent == 0 {
+            continue;
+        }
+        //add itself plus its own children to the parent
+        if let Some(&parent_idx) = index_map.get(&parent) {
+            procs[parent_idx].children_memory += procs[i].memory + procs[i].children_memory;
         }
     }
-    size
 }
 
 fn update_procs(sys: &mut System) -> Vec<MyProcess> {
@@ -231,11 +229,7 @@ fn update_procs(sys: &mut System) -> Vec<MyProcess> {
         }
     }
 
-    //calc depth
-    for pi in 0..procs.len() {
-        let pid = procs[pi].pid;
-        procs[pi].depth = depth(pid, &procs);
-    }
+    add_depths(&mut procs);
 
     //if parent does not exist, we force it to be in the root
     let pids = procs.iter().map(|x| x.pid).collect::<HashSet<usize>>();
@@ -251,20 +245,33 @@ fn update_procs(sys: &mut System) -> Vec<MyProcess> {
 
     procs
 }
-fn depth(pid: usize, procs: &[MyProcess]) -> usize {
-    let mut depth = 0usize;
-    let mut pid = pid;
-    loop {
-        let proc = procs.iter().find(|p| p.pid == pid);
 
-        if let Some(proc) = proc {
-            depth += 1;
-            pid = proc.parent;
-        } else {
-            return depth;
+///add depths to processes
+//we process each item, and walk up to parent to count the steps to root, this is out depth
+//to speed up, we cache the depth of each item's parent when we visit them the first time, so we dont need to walk them again
+fn add_depths(procs: &mut Vec<MyProcess>) {
+    let index_map: HashMap<usize, usize> =
+        HashMap::from_iter(procs.iter().enumerate().map(|(i, p)| (p.pid, i)));
+    //calc depth
+    for pi in 0..procs.len() {
+        let mut current = &procs[pi];
+        let mut depths = vec![current.pid]; //depths of items we need to save
+        let mut depth = 1; //actual depth
+        while let Some(p) = index_map.get(&current.parent) {
+            let parent_depth = procs[*p].depth;
+            if parent_depth != 0 {
+                //we have already the depth of the parent, use itls
+                depth += parent_depth;
+                break;
+            } else {
+                depth += 1;
+                depths.push(current.parent);
+                current = &procs[*p];
+            }
         }
-        if depth > 1000 {
-            return 0;
+        for i in 0..depths.len() {
+            let index = index_map.get(&depths[i]).unwrap();
+            procs[*index].depth = depth - i;
         }
     }
 }
@@ -284,5 +291,72 @@ fn parents_limited(pid: usize, procs: &[MyProcess], mut parents: HashSet<usize>)
     } else {
         parents.insert(parent);
         parents_limited(parent, procs, parents)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn proc(pid: usize, parent: usize, memory: u64, depth: usize) -> MyProcess {
+        MyProcess {
+            pid,
+            parent,
+            memory,
+            depth,
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn test_child_mem_and_depths() {
+        // flat: 1(100) -> 2(50), 3(30), 4(20)
+        let mut procs = vec![
+            proc(1, 0, 100, 0),
+            proc(2, 1, 50, 0),
+            proc(3, 1, 30, 0),
+            proc(4, 1, 20, 0),
+        ];
+        add_depths(&mut procs);
+        assert_eq!(
+            procs.iter().map(|p| p.depth).collect::<Vec<_>>(),
+            vec![1, 2, 2, 2]
+        );
+        update_children_usage(&mut procs);
+        assert_eq!(procs[0].children_memory, 100); // 50+30+20
+
+        // deep chain: 1(10) -> 2(20) -> 3(30) -> 4(40)
+        let mut procs = vec![
+            proc(1, 0, 10, 0),
+            proc(2, 1, 20, 0),
+            proc(3, 2, 30, 0),
+            proc(4, 3, 40, 0),
+        ];
+        add_depths(&mut procs);
+        assert_eq!(
+            procs.iter().map(|p| p.depth).collect::<Vec<_>>(),
+            vec![1, 2, 3, 4]
+        );
+        update_children_usage(&mut procs);
+        assert_eq!(procs[2].children_memory, 40); // 3 -> 4
+        assert_eq!(procs[1].children_memory, 70); // 2 -> 3 -> 4
+        assert_eq!(procs[0].children_memory, 90); // 1 -> 2 -> 3 -> 4
+
+        // mixed: 1(10) -> 2(20) -> 4(40), 2(20) -> 5(50), 1(10) -> 3(30)
+        let mut procs = vec![
+            proc(1, 0, 10, 0),
+            proc(2, 1, 20, 0),
+            proc(3, 1, 30, 0),
+            proc(4, 2, 40, 0),
+            proc(5, 2, 50, 0),
+        ];
+        add_depths(&mut procs);
+        assert_eq!(
+            procs.iter().map(|p| p.depth).collect::<Vec<_>>(),
+            vec![1, 2, 2, 3, 3]
+        );
+        update_children_usage(&mut procs);
+        assert_eq!(procs[1].children_memory, 90); // 2 -> 4+5
+        assert_eq!(procs[0].children_memory, 140); // 1 -> 2+3 (+ 4+5)
     }
 }
