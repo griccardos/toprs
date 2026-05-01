@@ -102,27 +102,16 @@ impl SortedProcesses {
 
     fn sort(&mut self) {
         match self.sort_col {
-            0 => self.procs.sort_by(|a, b| {
-                b.command_display
-                    .to_lowercase()
-                    .cmp(&a.command_display.to_lowercase())
-            }),
-            1 => self
+            0 => self
                 .procs
-                .sort_by(|a, b| b.name.to_lowercase().cmp(&a.name.to_lowercase())),
+                .sort_by_key(|a| Reverse(a.command_display.to_lowercase())),
+            1 => self.procs.sort_by_key(|a| Reverse(a.name.to_lowercase())),
             2 => self.procs.sort_by_key(|a| Reverse(a.pid)),
             3 => self.procs.sort_by_key(|a| Reverse(a.memory)),
-            4 => self
-                .procs
-                .sort_by(|a, b| b.children_memory.cmp(&a.children_memory)),
+            4 => self.procs.sort_by_key(|a| Reverse(a.children_memory)),
             5 => self.procs.sort_by_key(|a| Reverse(a.total())),
-            6 => self
-                .procs
-                .sort_by(|a, b| b.cpu.partial_cmp(&a.cpu).unwrap()),
-            7 => self
-                .procs
-                .sort_by(|a, b| b.disk.partial_cmp(&a.disk).unwrap()),
-
+            6 => self.procs.sort_by(|a, b| b.cpu.total_cmp(&a.cpu)),
+            7 => self.procs.sort_by(|a, b| b.disk.total_cmp(&a.disk)),
             _ => unreachable!(),
         }
         if self.sort_type == SortType::Ascending {

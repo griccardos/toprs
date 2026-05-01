@@ -819,11 +819,11 @@ impl State {
 
         //find top 5
         let mut temp = self.procs.to_vec();
-        temp.sort_by(|a, b| b.memory.cmp(&a.memory));
+        temp.sort_by_key(|a| Reverse(a.memory));
         self.top5memory = temp.iter().map(|f| f.pid).take(5).collect();
 
         let mut temp = self.procs.to_vec();
-        temp.sort_by(|a, b| b.cpu.partial_cmp(&a.cpu).unwrap());
+        temp.sort_by(|a, b| b.cpu.total_cmp(&a.cpu));
         self.top5cpu = temp.iter().map(|f| f.pid).take(5).collect();
     }
 
@@ -839,6 +839,7 @@ impl State {
 }
 
 use std::{
+    cmp::Reverse,
     process::Command,
     time::{Duration, Instant},
 };

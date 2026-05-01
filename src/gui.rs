@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{cmp::Reverse, time::Duration};
 
 use dioxus::{document::eval, prelude::*};
 use dioxus_desktop::{Config, WindowBuilder, tao::window::Icon, wry::dpi::PhysicalSize};
@@ -304,7 +304,7 @@ fn get_labels_parents_values(
 
 fn get_top5(procs: &[MyProcess]) -> Vec<MyProcess> {
     let mut temp = procs.to_vec();
-    temp.sort_by(|a, b| b.memory.cmp(&a.memory));
+    temp.sort_by_key(|a| Reverse(a.memory));
     temp.iter().take(5).cloned().collect()
 }
 fn get_top_memory(procs: &[MyProcess]) -> &MyProcess {

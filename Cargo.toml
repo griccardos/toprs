@@ -24,8 +24,8 @@ dirs = "6"                                         #for load config from home
 toml = "1.1.2"                                     #for config
 serde = { version = "1.0", features = ["derive"] } #for config
 #gui
-dioxus = { version = "0.7.6", optional = true }                 #gui
-dioxus-desktop = { version = "0.7.6", optional = true }         #gui
+dioxus = { version = "0.7.7", optional = true }                 #gui
+dioxus-desktop = { version = "0.7.7", optional = true }         #gui
 image = { version = "0.25", optional = true }                   #for icon
 tokio = { version = "1", features = ["time"], optional = true } #sleep
 

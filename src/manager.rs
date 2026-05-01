@@ -1,5 +1,6 @@
 use crate::{mynetwork::MyNetwork, myprocess::MyProcess};
 use std::{
+    cmp::Reverse,
     collections::{HashMap, HashSet},
     path::PathBuf,
     str::FromStr,
@@ -142,7 +143,7 @@ fn update_children_usage(procs: &mut Vec<MyProcess>) {
 
     // process deepest first so children accumulate before parents
     let mut indices: Vec<usize> = (0..procs.len()).collect();
-    indices.sort_by(|&a, &b| procs[b].depth.cmp(&procs[a].depth));
+    indices.sort_by_key(|&a| Reverse(procs[a].depth));
 
     for &i in &indices {
         let parent = procs[i].parent;
@@ -239,7 +240,7 @@ fn update_procs(sys: &mut System) -> Vec<MyProcess> {
         }
     }
 
-    procs.sort_by(|a, b| b.memory.cmp(&a.memory));
+    procs.sort_by_key(|a| Reverse(a.memory));
 
     update_children_usage(&mut procs);
 

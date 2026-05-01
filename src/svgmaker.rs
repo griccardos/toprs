@@ -104,7 +104,7 @@ fn draw_pid(
     layers: &mut Vec<Vec<LayerProc>>,
 ) {
     let mut vals: Vec<u64> = procs.iter().map(|s| s.memory).collect();
-    vals.sort_by(|a, b| b.cmp(a));
+    vals.sort_by_key(|&b| Reverse(b));
     let max_mem = procs.iter().max_by_key(|a| a.memory).unwrap().memory;
     let to;
     let t;
