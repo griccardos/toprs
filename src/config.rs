@@ -58,8 +58,7 @@ impl Config {
 
 fn get_home_config() -> PathBuf {
     //home directory
-    if let Some(mut dir) = dirs::home_dir() {
-        dir.push(".config");
+    if let Some(mut dir) = dirs::config_dir() {
         dir.push("toprs");
         dir.push("config.toml");
         return dir;

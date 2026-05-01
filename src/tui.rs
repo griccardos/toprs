@@ -637,7 +637,7 @@ fn handle_input(done: &mut bool, state: &mut State) {
                 KeyCode::Down | KeyCode::Char('j') => {
                     state.kill_signal = (state.kill_signal + 1).min(20)
                 }
-                KeyCode::Char(c) if c >= '0' && c <= '9' => {
+                KeyCode::Char(c) if c.is_ascii_digit() => {
                     state.kill_signal = c as usize - '0' as usize;
                 }
                 KeyCode::Up | KeyCode::Char('k') => {
@@ -679,10 +679,10 @@ fn handle_input(done: &mut bool, state: &mut State) {
                     state.filtering = !state.filtering;
                 }
                 KeyCode::Char('m') => {
-                    if state.visible.sort_col == 0 {
-                        if let Some(proc) = process_at_selected(state) {
-                            state.visible.hide_children_invert(proc.pid);
-                        }
+                    if state.visible.sort_col == 0
+                        && let Some(proc) = process_at_selected(state)
+                    {
+                        state.visible.hide_children_invert(proc.pid);
                     }
                 }
                 KeyCode::Char('F') => match state.selected {

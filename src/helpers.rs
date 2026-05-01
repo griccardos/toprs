@@ -20,19 +20,16 @@ pub fn nice_size_ops(val: u64, include_thousands: bool, zero_blank: bool) -> Str
     if val == 0.0 && zero_blank {
         "".to_string()
     } else if val < 5000.0 {
-        format!("{}B", (val as f64).formato(format0))
+        format!("{}B", (val).formato(format0))
     } else if val < 5000.0 * 1024.0 {
-        format!("{}K", (val as f64 / 1024.).formato(format))
+        format!("{}K", (val / 1024.).formato(format))
         //we prefer M for process view, so we weight it a bit more than the others
     } else if val < 50000.0 * 1024.0 * 1024.0 {
-        format!("{}M", (val as f64 / 1024. / 1024.).formato(format))
+        format!("{}M", (val / 1024. / 1024.).formato(format))
     } else if val < 5000.0 * 1024.0 * 1024.0 * 1024.0 {
-        format!("{}G", (val as f64 / 1024. / 1024. / 1024.).formato(format))
+        format!("{}G", (val / 1024. / 1024. / 1024.).formato(format))
     } else {
-        format!(
-            "{}T",
-            (val as f64 / 1024. / 1024. / 1024. / 1024.).formato(format)
-        )
+        format!("{}T", (val / 1024. / 1024. / 1024. / 1024.).formato(format))
     }
 }
 

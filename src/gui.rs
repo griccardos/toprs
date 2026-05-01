@@ -180,7 +180,7 @@ fn app() -> Element {
     }
 }
 
-fn update_sunburst(procs: &Vec<MyProcess>, max: Signal<usize>) {
+fn update_sunburst(procs: &[MyProcess], max: Signal<usize>) {
     let (l, p, v, t, m, c) = get_labels_parents_values(procs);
     let js = r##"
 

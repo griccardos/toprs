@@ -108,8 +108,8 @@ impl ProcManager {
                     name: n.0.to_string(),
                     received: n.1.received(),
                     sent: n.1.transmitted(),
-                    received_per_sec: received_per_sec,
-                    sent_per_sec: sent_per_sec,
+                    received_per_sec,
+                    sent_per_sec,
                 });
             }
         }
@@ -136,7 +136,7 @@ pub struct Totals {
 }
 
 ///we add up the value of all the children
-fn update_children_usage(procs: &mut Vec<MyProcess>) {
+fn update_children_usage(procs: &mut [MyProcess]) {
     // pid -> index
     let index_map: HashMap<usize, usize> =
         HashMap::from_iter(procs.iter().enumerate().map(|(i, p)| (p.pid, i)));
@@ -250,7 +250,7 @@ fn update_procs(sys: &mut System) -> Vec<MyProcess> {
 ///add depths to processes
 //we process each item, and walk up to parent to count the steps to root, this is out depth
 //to speed up, we cache the depth of each item's parent when we visit them the first time, so we dont need to walk them again
-fn add_depths(procs: &mut Vec<MyProcess>) {
+fn add_depths(procs: &mut [MyProcess]) {
     let index_map: HashMap<usize, usize> =
         HashMap::from_iter(procs.iter().enumerate().map(|(i, p)| (p.pid, i)));
     //calc depth
@@ -270,8 +270,8 @@ fn add_depths(procs: &mut Vec<MyProcess>) {
                 current = &procs[*p];
             }
         }
-        for i in 0..depths.len() {
-            let index = index_map.get(&depths[i]).unwrap();
+        for (i, depths_item) in depths.iter().enumerate() {
+            let index = index_map.get(depths_item).unwrap();
             procs[*index].depth = depth - i;
         }
     }
