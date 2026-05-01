@@ -1,8 +1,6 @@
-use std::{cmp::Reverse, collections::HashSet};
-
-use serde::{Deserialize, Serialize};
-
 use crate::{helpers::nice_size, myprocess::MyProcess};
+use serde::{Deserialize, Serialize};
+use std::{cmp::Reverse, collections::HashSet};
 
 #[derive(PartialEq, Debug, Serialize, Deserialize, Clone, Copy)]
 pub enum SortType {
@@ -17,6 +15,7 @@ pub struct SortedProcesses {
     pub filter: String,
     pub hide_children: HashSet<usize>, //hide children of this process(used for tree view only)
     procs: Vec<MyProcess>,
+    cached: Vec<Vec<String>>, //cached output
 }
 
 impl SortedProcesses {
@@ -28,6 +27,7 @@ impl SortedProcesses {
             hidezeros: true,
             filter: String::new(),
             hide_children: Default::default(),
+            cached: vec![],
         }
     }
 
@@ -45,8 +45,12 @@ impl SortedProcesses {
     pub fn update(&mut self, procs: &[MyProcess]) {
         self.procs = procs.to_vec();
         self.sort();
+        self.calc();
     }
-    pub fn procs(&self) -> Vec<Vec<String>> {
+    pub fn procs(&self) -> &Vec<Vec<String>> {
+        &self.cached
+    }
+    pub fn calc(&mut self) {
         let mut procs = self
             .procs
             .iter()
@@ -68,7 +72,7 @@ impl SortedProcesses {
             procs.retain(|a| !pids_to_remove.contains(&a.pid));
         }
 
-        procs
+        let cache = procs
             .iter()
             .map(|f| {
                 vec![
@@ -92,7 +96,8 @@ impl SortedProcesses {
                     },
                 ]
             })
-            .collect()
+            .collect();
+        self.cached = cache;
     }
 
     fn sort(&mut self) {
