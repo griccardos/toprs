@@ -2,7 +2,7 @@ use ratatui::{style::Color, widgets::Widget};
 
 struct State {
     //data
-    procs: Vec<MyProcess>,
+    procs: HashMap<usize, MyProcess>, //pid->proc
     visible: SortedProcesses,
     totals: Totals,
     top5memory: Vec<usize>,
@@ -33,7 +33,7 @@ pub fn run(config: Config) -> Result<bool, std::io::Error> {
     let mut stdout = std::io::stdout();
     let mut man = manager::ProcManager::new();
     let mut state = State {
-        procs: man.procs().clone(),
+        procs: man.procs().iter().map(|a| (a.pid, a.clone())).collect(),
         visible: SortedProcesses::new(),
         selected: Selected::Index(0),
         kill_signal: 9,
@@ -70,7 +70,7 @@ pub fn run(config: Config) -> Result<bool, std::io::Error> {
             //get update if necessary
             if last.elapsed().as_secs_f32() > state.config.tui.update_interval {
                 man.update();
-                state.procs = man.procs().clone();
+                state.procs = man.procs().iter().map(|a| (a.pid, a.clone())).collect();
                 state.sort();
                 state.totals = man.get_totals();
                 state.networks = man.get_networks();
@@ -85,13 +85,12 @@ pub fn run(config: Config) -> Result<bool, std::io::Error> {
                 draw_help(f);
             }
             if let Some(pid) = state.show_info
-                && let Some(proc) = state.procs.iter().find(|p| p.pid == pid)
+                && let Some(proc) = state.procs.get(&pid)
             {
-                let parent = if let Some(pproc) = state.procs.iter().find(|p| p.pid == proc.parent)
-                {
-                    pproc.name.clone()
+                let parent = if let Some(pproc) = state.procs.get(&proc.parent) {
+                    &pproc.name
                 } else {
-                    "".to_string()
+                    ""
                 };
                 draw_process_info(f, proc, parent);
             }
@@ -131,6 +130,11 @@ pub fn run(config: Config) -> Result<bool, std::io::Error> {
 }
 
 fn sync_selection(state: &mut State, tablestate: &mut TableState) {
+    if state.visible.procs().is_empty() {
+        tablestate.select(None);
+        return;
+    }
+
     //ensure selected is in limits
     match state.selected {
         Selected::Index(ind) => {
@@ -138,7 +142,7 @@ fn sync_selection(state: &mut State, tablestate: &mut TableState) {
                 Selected::Index(ind.min(state.visible.procs().len().saturating_sub(1)));
         }
         Selected::Proc(pid) => {
-            if !state.procs.iter().any(|p| p.pid == pid) {
+            if !state.procs.contains_key(&pid) {
                 state.selected = Selected::Index(0);
             }
         }
@@ -151,7 +155,7 @@ fn draw_kill(f: &mut Frame<'_>, tablestate: &mut TableState, state: &State) {
         return;
     };
 
-    let rows = vec![
+    static ROWS: &[&str] = &[
         "0: Cancel",
         "1: SIGHUP - Hangup",
         "2: SIGINT - Interrupt",
@@ -174,11 +178,11 @@ fn draw_kill(f: &mut Frame<'_>, tablestate: &mut TableState, state: &State) {
         "19: SIGSTOP - Stop",
         "20: SIGTSTP - Terminal Stop",
     ];
-    let max_wid = rows.iter().map(|a| a.len()).max().unwrap_or(10) as u16;
+    let max_wid = ROWS.iter().map(|a| a.len()).max().unwrap_or(10) as u16;
     let widths = [Constraint::Length(max_wid)];
 
     let t = Table::new(
-        rows.iter().map(|a| Row::new(vec![*a])).collect::<Vec<_>>(),
+        ROWS.iter().map(|a| Row::new([*a])).collect::<Vec<_>>(),
         widths,
     )
     .row_highlight_style(Style::default().bg(Color::LightYellow).fg(Color::Black))
@@ -199,7 +203,7 @@ fn draw_kill(f: &mut Frame<'_>, tablestate: &mut TableState, state: &State) {
     f.render_stateful_widget(t, rect, tablestate);
 }
 
-fn draw_process_info(f: &mut Frame<'_>, proc: &MyProcess, parent: String) {
+fn draw_process_info(f: &mut Frame<'_>, proc: &MyProcess, parent: &str) {
     let mut lines = vec![
         format!("PID: {}", proc.pid),
         format!("Name: {}", proc.name),
@@ -248,7 +252,10 @@ fn draw_filter(f: &mut Frame, state: &State) {
     }
     let top_height = get_cores_height(state) + 4;
     let p = Paragraph::new(format!("Filter: {}", state.filter)).style(style);
-    f.render_widget(p, Rect::new(f.area().width - 40, top_height, 40, 1));
+    f.render_widget(
+        p,
+        Rect::new(f.area().width.saturating_sub(40), top_height, 40, 1),
+    );
 }
 fn draw_search(f: &mut Frame, state: &State) {
     let mut style = Style::default();
@@ -257,7 +264,10 @@ fn draw_search(f: &mut Frame, state: &State) {
     }
     let top_height = get_cores_height(state) + 4;
     let p = Paragraph::new(format!("Search: {}", state.search)).style(style);
-    f.render_widget(p, Rect::new(f.area().width - 40, top_height, 40, 1));
+    f.render_widget(
+        p,
+        Rect::new(f.area().width.saturating_sub(40), top_height, 40, 1),
+    );
 }
 fn draw_help(f: &mut Frame) {
     let help = r#"↑/↓ j/k    Scroll
@@ -291,7 +301,7 @@ command line arguments for modes:
         );
     let x = f.area().width / 3;
     let y = f.area().height.saturating_sub(help.lines().count() as u16) / 3;
-    let w = 40.min(f.area().width.saturating_sub(x));
+    let w = 50.min(f.area().width.saturating_sub(x));
     let h = 20.min(f.area().height.saturating_sub(y));
     let rect = Rect::new(x, y, w, h);
     f.render_widget(Clear, rect);
@@ -308,7 +318,7 @@ fn draw_top(f: &mut Frame, state: &State) {
         draw_cpu_cores(f, state);
     }
 
-    let max_cpu = totals.cpus.iter().cloned().fold(0., f32::max) / 100.;
+    let max_cpu = totals.cpus.iter().copied().fold(0., f32::max) / 100.;
     draw_cpu_summary(
         f,
         Rect::new(0, cpu_height, 48, 1),
@@ -523,12 +533,13 @@ fn draw_table(f: &mut Frame, state: &State, tablestate: &mut TableState) {
         .procs()
         .iter()
         .map(|f| {
+            let pid = f[2].parse::<usize>().unwrap();
+
             Row::new(f.iter().enumerate().map(|(i, c)| {
                 let mut val = match i {
                     2.. => format!("{c:>10}"),
                     _ => c.to_string(),
                 };
-                let pid = f[2].parse::<usize>().unwrap();
 
                 let mut style = if state.top5memory.contains(&pid) && (i == 3 || i == 1) {
                     Style::default().fg(Color::LightRed)
@@ -587,7 +598,7 @@ fn get_cores_height(state: &State) -> u16 {
 }
 
 fn handle_input(done: &mut bool, state: &mut State) {
-    if event::poll(Duration::from_millis(50)).unwrap()
+    if let Ok(true) = event::poll(Duration::from_millis(50))
         && let Ok(Event::Key(key)) = event::read()
         && key.kind == KeyEventKind::Press
     {
@@ -723,10 +734,6 @@ fn handle_input(done: &mut bool, state: &mut State) {
                 KeyCode::Home => move_by(state, isize::MIN),
                 KeyCode::End => move_by(state, isize::MAX),
                 KeyCode::Enter => {
-                    if state.show_info.is_some() {
-                        state.show_info = None;
-                        return;
-                    }
                     if let Some(proc) = process_at_selected(state) {
                         state.show_info = Some(proc.pid);
                     }
@@ -779,14 +786,8 @@ fn process_at_selected(state: &State) -> Option<MyProcess> {
             .procs()
             .get(ind)
             .and_then(|a| a.get(2))
-            .and_then(|pid_s| {
-                state
-                    .procs
-                    .iter()
-                    .find(|a| a.pid.to_string() == *pid_s)
-                    .cloned()
-            }),
-        Selected::Proc(pid) => state.procs.iter().find(|a| a.pid == pid).cloned(),
+            .and_then(|pid_s| state.procs.get(&pid_s.parse().unwrap_or_default()).cloned()),
+        Selected::Proc(pid) => state.procs.get(&pid).cloned(),
     }
 }
 
@@ -794,7 +795,7 @@ fn move_by(state: &mut State, by: isize) {
     match state.selected {
         Selected::Index(ind) => {
             state.selected = Selected::Index(
-                (ind.saturating_add_signed(by)).min(state.visible.procs().len() - 1),
+                (ind.saturating_add_signed(by)).min(state.visible.procs().len().saturating_sub(1)),
             );
         }
         Selected::Proc(pid) => {
@@ -807,32 +808,37 @@ fn move_by(state: &mut State, by: isize) {
             ind = ind
                 .saturating_add_signed(by)
                 .min(state.visible.procs().len() - 1);
-            state.selected =
-                Selected::Proc(state.visible.procs()[ind][2].parse::<usize>().unwrap());
+            state.selected = Selected::Proc(
+                state.visible.procs()[ind][2]
+                    .parse::<usize>()
+                    .unwrap_or_default(),
+            );
         }
     }
 }
 
 impl State {
     fn sort(&mut self) {
-        self.visible.update(&self.procs);
+        let mut temp: Vec<_> = self.procs.values().cloned().collect();
+        self.visible.update(&temp);
 
         //find top 5
-        let mut temp = self.procs.to_vec();
         temp.sort_by_key(|a| Reverse(a.memory));
         self.top5memory = temp.iter().map(|f| f.pid).take(5).collect();
 
-        let mut temp = self.procs.to_vec();
         temp.sort_by(|a, b| b.cpu.total_cmp(&a.cpu));
         self.top5cpu = temp.iter().map(|f| f.pid).take(5).collect();
     }
 
     fn update_search(&mut self) {
+        let search_lower = self.search.to_lowercase();
         //we find the first process matching the search string
-        if let Some(proc) = self.visible.procs().iter().find(|a| {
-            a.iter()
-                .any(|a| a.to_lowercase().contains(&self.search.to_lowercase()))
-        }) {
+        if let Some(proc) = self
+            .visible
+            .procs()
+            .iter()
+            .find(|a| a.iter().any(|a| a.to_lowercase().contains(&search_lower)))
+        {
             self.selected = Selected::Proc(proc[2].parse::<usize>().unwrap_or_default());
         }
     }
@@ -840,6 +846,7 @@ impl State {
 
 use std::{
     cmp::Reverse,
+    collections::HashMap,
     process::Command,
     time::{Duration, Instant},
 };
