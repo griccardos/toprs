@@ -33,12 +33,21 @@ struct Args {
     #[options(help = "Print to stdout")]
     out: bool,
 
+    #[options(help = "Print version")]
+    version: bool,
+
     #[options(help = "Print help message")]
     help: bool,
 }
 
 fn main() {
     let ops = Args::parse_args_default_or_exit();
+
+    if ops.version {
+        println!("{}", env!("CARGO_PKG_VERSION"));
+        return;
+    }
+
     let config = Config::load();
     let default_mode = config.mode;
 
