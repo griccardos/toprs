@@ -158,7 +158,12 @@ fn update_children_usage(procs: &mut [MyProcess]) {
 }
 
 fn update_procs(sys: &mut System) -> Vec<MyProcess> {
-    sys.refresh_all();
+    sys.refresh_specifics(
+        RefreshKind::nothing()
+            .with_cpu(CpuRefreshKind::everything())
+            .with_processes(ProcessRefreshKind::everything())
+            .with_memory(MemoryRefreshKind::everything()),
+    );
     let mut procs = sys
         .processes()
         .iter()
