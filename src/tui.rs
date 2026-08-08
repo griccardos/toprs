@@ -860,17 +860,18 @@ use crate::{
     myprocess::MyProcess,
     sorted::{SortType, SortedProcesses},
 };
-use crossterm::{
-    event::{
-        self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEvent, KeyEventKind,
-        KeyModifiers,
-    },
-    execute,
-    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
-};
+
 use ratatui::{
     Frame, Terminal,
     backend::CrosstermBackend,
+    crossterm::{
+        event::{
+            self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEvent, KeyEventKind,
+            KeyModifiers,
+        },
+        execute,
+        terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
+    },
     layout::{Constraint, Rect},
     style::Style,
     text::{Line, Span},
