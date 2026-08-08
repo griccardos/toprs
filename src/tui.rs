@@ -1,5 +1,3 @@
-use ratatui::{style::Color, widgets::Widget};
-
 struct State {
     //data
     procs: HashMap<usize, MyProcess>, //pid->proc
@@ -61,56 +59,71 @@ pub fn run(config: Config) -> Result<bool, std::io::Error> {
     let back = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(back)?;
     let mut done = false;
-    let mut last = Instant::now();
+    let mut last = Instant::now().sub(Duration::from_hours(1)); //so we update immediately
     let mut tablestate = TableState::default();
     let mut tablestate_kill = TableState::default();
 
     while !done {
-        terminal.draw(|f| {
-            //get update if necessary
-            if last.elapsed().as_secs_f32() > state.config.tui.update_interval {
-                man.update();
-                state.procs = man.procs().iter().map(|a| (a.pid, a.clone())).collect();
-                state.sort();
-                state.totals = man.get_totals();
-                state.networks = man.get_networks();
-                last = Instant::now();
-                sync_selection(&mut state, &mut tablestate);
-            }
+        let mut must_redraw = false;
 
-            draw_top(f, &state);
-            draw_table(f, &state, &mut tablestate);
+        //check if input
+        if let Ok(true) = event::poll(Duration::from_millis(50))
+            && let Ok(Event::Key(key)) = event::read()
+            && key.kind == KeyEventKind::Press
+        {
+            handle_input(&mut done, &mut state, key);
+            must_redraw = true;
+        }
 
-            if state.show_help {
-                draw_help(f);
-            }
-            if let Some(pid) = state.show_info
-                && let Some(proc) = state.procs.get(&pid)
-            {
-                let parent = if let Some(pproc) = state.procs.get(&proc.parent) {
-                    &pproc.name
-                } else {
-                    ""
-                };
-                draw_process_info(f, proc, parent);
-            }
-            if state.show_kill {
-                draw_kill(f, &mut tablestate_kill, &state);
-            }
+        //check if must update
+        if last.elapsed().as_secs_f32() > state.config.tui.update_interval {
+            man.update();
+            state.procs = man.procs().iter().map(|a| (a.pid, a.clone())).collect();
+            state.totals = man.get_totals();
+            state.networks = man.get_networks();
+            last = Instant::now();
+            must_redraw = true;
+        }
 
-            if state.searching {
-                draw_search(f, &state);
-            } else if state.filtering || !state.filter.is_empty() {
-                draw_filter(f, &state);
-            }
-
-            handle_input(&mut done, &mut state);
-
+        if must_redraw {
+            //update sorting and filters
+            state.sort();
             sync_selection(&mut state, &mut tablestate);
 
-            state.kill_signal = state.kill_signal.min(20);
-            tablestate_kill.select(Some(state.kill_signal));
-        })?;
+            //do draw
+            terminal.draw(|f| {
+                draw_top(f, &state);
+                draw_table(f, &state, &mut tablestate);
+
+                if state.show_help {
+                    draw_help(f);
+                }
+                if let Some(pid) = state.show_info
+                    && let Some(proc) = state.procs.get(&pid)
+                {
+                    let parent = if let Some(pproc) = state.procs.get(&proc.parent) {
+                        &pproc.name
+                    } else {
+                        ""
+                    };
+                    draw_process_info(f, proc, parent);
+                }
+                if state.show_kill {
+                    draw_kill(f, &mut tablestate_kill, &state);
+                }
+
+                if state.searching {
+                    draw_search(f, &state);
+                } else if state.filtering || !state.filter.is_empty() {
+                    draw_filter(f, &state);
+                }
+
+                sync_selection(&mut state, &mut tablestate);
+
+                state.kill_signal = state.kill_signal.min(20);
+                tablestate_kill.select(Some(state.kill_signal));
+            })?;
+        }
     }
 
     //save config
@@ -597,175 +610,170 @@ fn get_cores_height(state: &State) -> u16 {
     }
 }
 
-fn handle_input(done: &mut bool, state: &mut State) {
-    if let Ok(true) = event::poll(Duration::from_millis(50))
-        && let Ok(Event::Key(key)) = event::read()
-        && key.kind == KeyEventKind::Press
-    {
-        if state.filtering {
-            match key.code {
-                KeyCode::Esc => {
-                    state.filtering = false;
-                    state.filter.clear();
-                }
-                KeyCode::Enter => state.filtering = false,
-                KeyCode::Char(c) => state.filter.push(c),
-                KeyCode::Backspace => {
-                    let _ = state.filter.pop();
-                }
-                _ => {}
+fn handle_input(done: &mut bool, state: &mut State, key: KeyEvent) {
+    if state.filtering {
+        match key.code {
+            KeyCode::Esc => {
+                state.filtering = false;
+                state.filter.clear();
             }
-            state.visible.set_filter(state.filter.clone());
-        } else if state.searching {
-            match key.code {
-                KeyCode::Esc | KeyCode::Enter => {
-                    state.searching = false;
-                    state.search.clear();
-                }
-                KeyCode::Char(c) => {
-                    state.search.push(c);
-                    state.update_search();
-                }
-                KeyCode::Backspace => {
-                    let _ = state.search.pop();
-                    state.update_search();
-                }
-                _ => {}
+            KeyCode::Enter => state.filtering = false,
+            KeyCode::Char(c) => state.filter.push(c),
+            KeyCode::Backspace => {
+                let _ = state.filter.pop();
             }
-            state.visible.set_filter(state.filter.clone());
-        } else if state.show_help {
-            match key.code {
-                KeyCode::Esc | KeyCode::Char('?') | KeyCode::F(1) => state.show_help = false,
-                _ => {}
+            _ => {}
+        }
+        state.visible.set_filter(state.filter.clone());
+    } else if state.searching {
+        match key.code {
+            KeyCode::Esc | KeyCode::Enter => {
+                state.searching = false;
+                state.search.clear();
             }
-        } else if state.show_info.is_some() {
-            match key.code {
-                KeyCode::Esc | KeyCode::Enter => state.show_info = None,
-                _ => {}
+            KeyCode::Char(c) => {
+                state.search.push(c);
+                state.update_search();
             }
-        } else if state.show_kill {
-            match key.code {
-                KeyCode::Down | KeyCode::Char('j') => {
-                    state.kill_signal = (state.kill_signal + 1).min(20)
-                }
-                KeyCode::Char(c) if c.is_ascii_digit() => {
-                    state.kill_signal = c as usize - '0' as usize;
-                }
-                KeyCode::Up | KeyCode::Char('k') => {
-                    state.kill_signal = state.kill_signal.saturating_sub(1)
-                }
-                KeyCode::Esc => state.show_kill = false,
-                KeyCode::Enter => {
-                    if state.kill_signal == 0 {
-                        //cancel
-                    } else {
-                        //send signal
-                        let signal = state.kill_signal as i32;
-                        if let Some(proc) = &state.kill_process {
-                            let _ = Command::new("kill")
-                                .arg(format!("-{signal}"))
-                                .arg(format!("{}", proc.pid))
-                                .output();
-                        }
-                    }
-                    state.show_kill = false;
-                }
-                _ => {}
+            KeyCode::Backspace => {
+                let _ = state.search.pop();
+                state.update_search();
             }
-        } else {
-            match key.code {
-                KeyCode::Char('q') => *done = true,
-                KeyCode::Char('s') => {
-                    state.visible.sort_cycle();
-                    state.sort();
-                }
-                KeyCode::Char('c') => {
-                    if key.modifiers.contains(KeyModifiers::CONTROL) {
-                        *done = true
-                    } else {
-                        state.config.tui.show_cpu_per_core = !state.config.tui.show_cpu_per_core;
+            _ => {}
+        }
+        state.visible.set_filter(state.filter.clone());
+    } else if state.show_help {
+        match key.code {
+            KeyCode::Esc | KeyCode::Char('?') | KeyCode::F(1) => state.show_help = false,
+            _ => {}
+        }
+    } else if state.show_info.is_some() {
+        match key.code {
+            KeyCode::Esc | KeyCode::Enter => state.show_info = None,
+            _ => {}
+        }
+    } else if state.show_kill {
+        match key.code {
+            KeyCode::Down | KeyCode::Char('j') => {
+                state.kill_signal = (state.kill_signal + 1).min(20)
+            }
+            KeyCode::Char(c) if c.is_ascii_digit() => {
+                state.kill_signal = c as usize - '0' as usize;
+            }
+            KeyCode::Up | KeyCode::Char('k') => {
+                state.kill_signal = state.kill_signal.saturating_sub(1)
+            }
+            KeyCode::Esc => state.show_kill = false,
+            KeyCode::Enter => {
+                if state.kill_signal == 0 {
+                    //cancel
+                } else {
+                    //send signal
+                    let signal = state.kill_signal as i32;
+                    if let Some(proc) = &state.kill_process {
+                        let _ = Command::new("kill")
+                            .arg(format!("-{signal}"))
+                            .arg(format!("{}", proc.pid))
+                            .output();
                     }
                 }
-                KeyCode::Char('f') => {
-                    state.filtering = !state.filtering;
+                state.show_kill = false;
+            }
+            _ => {}
+        }
+    } else {
+        match key.code {
+            KeyCode::Char('q') => *done = true,
+            KeyCode::Char('s') => {
+                state.visible.sort_cycle();
+                state.sort();
+            }
+            KeyCode::Char('c') => {
+                if key.modifiers.contains(KeyModifiers::CONTROL) {
+                    *done = true
+                } else {
+                    state.config.tui.show_cpu_per_core = !state.config.tui.show_cpu_per_core;
                 }
-                KeyCode::Char('m') => {
-                    if state.visible.sort_col == 0
-                        && let Some(proc) = process_at_selected(state)
-                    {
-                        state.visible.hide_children_invert(proc.pid);
-                    }
+            }
+            KeyCode::Char('f') => {
+                state.filtering = !state.filtering;
+            }
+            KeyCode::Char('m') => {
+                if state.visible.sort_col == 0
+                    && let Some(proc) = process_at_selected(state)
+                {
+                    state.visible.hide_children_invert(proc.pid);
                 }
-                KeyCode::Char('F') => match state.selected {
-                    Selected::Index(_) => {
-                        if let Some(proc) = process_at_selected(state) {
-                            state.selected = Selected::Proc(proc.pid);
-                        }
-                    }
-                    Selected::Proc(pid) => {
-                        state.selected = Selected::Index(
-                            state
-                                .visible
-                                .procs()
-                                .iter()
-                                .position(|p| p[2].parse::<usize>().unwrap_or_default() == pid)
-                                .unwrap_or(0),
-                        );
-                    }
-                },
-                KeyCode::Char('/') => {
-                    state.searching = true;
-                }
-                KeyCode::Char('z') => state.visible.hidezeros = !state.visible.hidezeros,
-                KeyCode::Char('?') | KeyCode::F(1) => state.show_help = !state.show_help,
-                KeyCode::Char('g') => {
-                    *done = true;
-                    state.start_gui = true
-                }
-                KeyCode::Char('k') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                    state.show_kill = !state.show_kill;
-                    let proc = process_at_selected(state);
-                    state.kill_process = proc;
-                }
-                KeyCode::Down | KeyCode::Char('j') => move_by(state, 1),
-                KeyCode::Up | KeyCode::Char('k') => move_by(state, -1),
-                KeyCode::PageDown => move_by(state, 20),
-                KeyCode::PageUp => move_by(state, -20),
-                KeyCode::Home => move_by(state, isize::MIN),
-                KeyCode::End => move_by(state, isize::MAX),
-                KeyCode::Enter => {
+            }
+            KeyCode::Char('F') => match state.selected {
+                Selected::Index(_) => {
                     if let Some(proc) = process_at_selected(state) {
-                        state.show_info = Some(proc.pid);
+                        state.selected = Selected::Proc(proc.pid);
                     }
                 }
-                KeyCode::Left | KeyCode::Char('h') => {
-                    state.visible.sort_col = state.visible.sort_col.saturating_sub(1);
-                    if state.visible.sort_col == 0 {
-                        state.visible.sort_type = SortType::None;
-                    }
-                    state.sort();
+                Selected::Proc(pid) => {
+                    state.selected = Selected::Index(
+                        state
+                            .visible
+                            .procs()
+                            .iter()
+                            .position(|p| p[2].parse::<usize>().unwrap_or_default() == pid)
+                            .unwrap_or(0),
+                    );
                 }
-                KeyCode::Right | KeyCode::Char('l') => {
-                    state.visible.sort_col = (state.visible.sort_col + 1).min(7);
-                    if state.visible.sort_col > 0 && state.visible.sort_type == SortType::None {
-                        state.visible.sort_type = SortType::Descending;
-                    }
-                    state.sort();
-                }
-                KeyCode::Char('t') => {
-                    state.visible.sort_col = 0;
-                    state.visible.sort_type = SortType::None;
-                    state.sort();
-                }
-                KeyCode::Char('-') => {
-                    state.config.tui.update_interval =
-                        (state.config.tui.update_interval - 0.5).max(0.5);
-                }
-                KeyCode::Char('+') => {
-                    state.config.tui.update_interval += 0.5;
-                }
-                _ => {}
+            },
+            KeyCode::Char('/') => {
+                state.searching = true;
             }
+            KeyCode::Char('z') => state.visible.hidezeros = !state.visible.hidezeros,
+            KeyCode::Char('?') | KeyCode::F(1) => state.show_help = !state.show_help,
+            KeyCode::Char('g') => {
+                *done = true;
+                state.start_gui = true
+            }
+            KeyCode::Char('k') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                state.show_kill = !state.show_kill;
+                let proc = process_at_selected(state);
+                state.kill_process = proc;
+            }
+            KeyCode::Down | KeyCode::Char('j') => move_by(state, 1),
+            KeyCode::Up | KeyCode::Char('k') => move_by(state, -1),
+            KeyCode::PageDown => move_by(state, 20),
+            KeyCode::PageUp => move_by(state, -20),
+            KeyCode::Home => move_by(state, isize::MIN),
+            KeyCode::End => move_by(state, isize::MAX),
+            KeyCode::Enter => {
+                if let Some(proc) = process_at_selected(state) {
+                    state.show_info = Some(proc.pid);
+                }
+            }
+            KeyCode::Left | KeyCode::Char('h') => {
+                state.visible.sort_col = state.visible.sort_col.saturating_sub(1);
+                if state.visible.sort_col == 0 {
+                    state.visible.sort_type = SortType::None;
+                }
+                state.sort();
+            }
+            KeyCode::Right | KeyCode::Char('l') => {
+                state.visible.sort_col = (state.visible.sort_col + 1).min(7);
+                if state.visible.sort_col > 0 && state.visible.sort_type == SortType::None {
+                    state.visible.sort_type = SortType::Descending;
+                }
+                state.sort();
+            }
+            KeyCode::Char('t') => {
+                state.visible.sort_col = 0;
+                state.visible.sort_type = SortType::None;
+                state.sort();
+            }
+            KeyCode::Char('-') => {
+                state.config.tui.update_interval =
+                    (state.config.tui.update_interval - 0.5).max(0.5);
+            }
+            KeyCode::Char('+') => {
+                state.config.tui.update_interval += 0.5;
+            }
+            _ => {}
         }
     }
 }
@@ -844,16 +852,18 @@ impl State {
     }
 }
 
-use std::{
-    cmp::Reverse,
-    collections::HashMap,
-    process::Command,
-    time::{Duration, Instant},
+use crate::{
+    config::Config,
+    helpers::{nice_size, nice_size_g, nice_size_ops, nice_time},
+    manager::{self, Totals},
+    mynetwork::MyNetwork,
+    myprocess::MyProcess,
+    sorted::{SortType, SortedProcesses},
 };
-
 use crossterm::{
     event::{
-        self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind, KeyModifiers,
+        self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEvent, KeyEventKind,
+        KeyModifiers,
     },
     execute,
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
@@ -869,12 +879,11 @@ use ratatui::{
         TableState,
     },
 };
-
-use crate::{
-    config::Config,
-    helpers::{nice_size, nice_size_g, nice_size_ops, nice_time},
-    manager::{self, Totals},
-    mynetwork::MyNetwork,
-    myprocess::MyProcess,
-    sorted::{SortType, SortedProcesses},
+use ratatui::{style::Color, widgets::Widget};
+use std::{
+    cmp::Reverse,
+    collections::HashMap,
+    ops::Sub,
+    process::Command,
+    time::{Duration, Instant},
 };
