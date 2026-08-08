@@ -221,9 +221,12 @@ fn update_procs(sys: &mut System) -> Vec<MyProcess> {
     //if there is a loop, we make the lowest pid's parent, equal to 0
     //using lowest pid is not entirely correct, but we must break cycle somewhere
     //TODO: find actual parent which no longer exists
+
+    let pid_and_parent: HashMap<usize, usize> = procs.iter().map(|a| (a.pid, a.parent)).collect();
+
     let mut change = HashSet::new();
     for proc in procs.iter() {
-        let parents = parents_limited(proc.pid, &procs, HashSet::new());
+        let parents = parents_limited(proc.pid, &pid_and_parent);
         //if parents contains this pid, this pid is looped, so we make it 0 if it is the lowest
         if parents.contains(&proc.pid) && parents.iter().min().unwrap() == &proc.pid {
             change.insert(proc.pid);
@@ -284,20 +287,15 @@ fn add_depths(procs: &mut [MyProcess]) {
 
 ///This finds all parents
 /// if there is a loop, it returns
-fn parents_limited(pid: usize, procs: &[MyProcess], mut parents: HashSet<usize>) -> HashSet<usize> {
-    let proc = procs.iter().find(|x| x.pid == pid);
-    let parent = if let Some(proc) = proc {
-        proc.parent
-    } else {
-        0
-    };
-
-    if parents.contains(&parent) {
-        parents
-    } else {
-        parents.insert(parent);
-        parents_limited(parent, procs, parents)
+fn parents_limited(pid: usize, pid_and_parent: &HashMap<usize, usize>) -> HashSet<usize> {
+    let mut parents = HashSet::new();
+    let parent = pid_and_parent.get(&pid);
+    if let Some(parent) = parent
+        && !parents.insert(*parent)
+    {
+        parents_limited(*parent, pid_and_parent);
     }
+    parents
 }
 
 #[cfg(test)]
