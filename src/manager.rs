@@ -161,14 +161,13 @@ fn update_procs(sys: &mut System) -> Vec<MyProcess> {
     sys.refresh_specifics(
         RefreshKind::nothing()
             .with_cpu(CpuRefreshKind::everything())
-            .with_processes(ProcessRefreshKind::everything())
+            .with_processes(ProcessRefreshKind::everything().without_tasks())
             .with_memory(MemoryRefreshKind::everything()),
     );
     let mut procs = sys
         .processes()
         .iter()
         .map(|x| x.1)
-        .filter(|x| x.thread_kind() != Some(sysinfo::ThreadKind::Userland))
         .map(|x| {
             let long_cmd: Vec<String> = x
                 .cmd()
