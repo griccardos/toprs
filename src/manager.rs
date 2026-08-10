@@ -288,12 +288,14 @@ fn add_depths(procs: &mut [MyProcess]) {
 /// if there is a loop, it returns
 fn parents_limited(pid: usize, pid_and_parent: &HashMap<usize, usize>) -> HashSet<usize> {
     let mut parents = HashSet::new();
-    let parent = pid_and_parent.get(&pid);
-    if let Some(parent) = parent
-        && !parents.insert(*parent)
-    {
-        parents_limited(*parent, pid_and_parent);
+    let mut current = pid;
+    while let Some(&parent) = pid_and_parent.get(&current) {
+        if parent == 0 || !parents.insert(parent) {
+            break;
+        }
+        current = parent;
     }
+
     parents
 }
 
