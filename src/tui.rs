@@ -390,13 +390,17 @@ fn draw_process_interval(f: &mut Frame<'_>, state: &State, cpu_height: u16) {
 
 fn draw_network(state: &State, f: &mut Frame<'_>, y: u16) {
     let mut spans = vec![Span::raw("Network: ")];
-    let nets: Vec<_> = state
+    let mut nets: Vec<_> = state
         .networks
         .iter()
         .filter(|n| n.received > 0 || n.sent > 0)
+        .collect();
+    nets.sort_by(|a, b| (b.received + b.sent).cmp(&(a.received + a.sent)));
+    let net_spans: Vec<_> = nets
+        .iter()
         .map(|n| {
             Span::raw(format!(
-                "{} ↓ {} ↑ {}     ↓ {}/s ↑ {}/s",
+                "[{} ↓ {} ↑ {}  ↓ {}/s ↑ {}/s] ",
                 n.name,
                 nice_size_ops(n.received, true, false),
                 nice_size_ops(n.sent, true, false),
@@ -405,7 +409,7 @@ fn draw_network(state: &State, f: &mut Frame<'_>, y: u16) {
             ))
         })
         .collect();
-    spans.extend(nets);
+    spans.extend(net_spans);
     let line = Line::from(spans);
     f.render_widget(line, Rect::new(0, y, f.area().width, 1));
 }
